@@ -1,0 +1,959 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local oldGui = playerGui:FindFirstChild("MultiFarmGUI")
+if oldGui then
+	oldGui:Destroy()
+end
+
+local NPC_NAMES = {
+	"Bandit",
+	"BanditLeader",
+	"Mihawk",
+	"Miwa",
+	"Monkey",
+	"National Level Hunter",
+	"Shank",
+	"Snow Bandit",
+	"Sorcerer Student"
+}
+
+local BOSS_NAMES = {
+	["Verdant Hero"] = true,
+	["Sung Jinwoo"] = true,
+	["Gojo"] = true,
+	["Sukuna"] = true,
+	["Saber"] = true,
+}
+
+local guiToggleKey = Enum.KeyCode.RightControl
+
+local selectedBoss = nil
+local selectedNPCName = nil
+
+local autoFarmBossEnabled = false
+local autoFarmNPCEnabled = false
+local autoEquipEnabled = false
+local flyEnabled = false
+local followBossEnabled = false
+
+local autoFarmBossThread = 0
+local autoFarmNPCThread = 0
+local autoEquipThread = 0
+local followBossThread = 0
+local flyThread = 0
+
+local flyVelocity = nil
+local flyGyro = nil
+
+local cachedBosses = {}
+local cachedNPCModels = {}
+local lastBossCacheTime = 0
+local lastNPCCacheTime = 0
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MultiFarmGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 430, 0, 700)
+frame.Position = UDim2.new(0.5, -215, 0.5, -350)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 38)
+titleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = frame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -50, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Farm GUI"
+titleText.TextColor3 = Color3.new(1, 1, 1)
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 24
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -36, 0, 4)
+closeButton.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 20
+closeButton.BorderSizePixel = 0
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeButton
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 24)
+statusLabel.Position = UDim2.new(0, 10, 0, 48)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: parado"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 170)
+statusLabel.Font = Enum.Font.SourceSansBold
+statusLabel.TextSize = 18
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = frame
+
+local tabBoss = Instance.new("TextButton")
+tabBoss.Size = UDim2.new(0, 190, 0, 34)
+tabBoss.Position = UDim2.new(0, 10, 0, 80)
+tabBoss.BackgroundColor3 = Color3.fromRGB(70, 130, 255)
+tabBoss.Text = "Página Boss"
+tabBoss.TextColor3 = Color3.new(1, 1, 1)
+tabBoss.Font = Enum.Font.SourceSansBold
+tabBoss.TextSize = 18
+tabBoss.BorderSizePixel = 0
+tabBoss.Parent = frame
+
+local tabBossCorner = Instance.new("UICorner")
+tabBossCorner.CornerRadius = UDim.new(0, 8)
+tabBossCorner.Parent = tabBoss
+
+local tabNPC = Instance.new("TextButton")
+tabNPC.Size = UDim2.new(0, 190, 0, 34)
+tabNPC.Position = UDim2.new(0, 210, 0, 80)
+tabNPC.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+tabNPC.Text = "Página NPC"
+tabNPC.TextColor3 = Color3.new(1, 1, 1)
+tabNPC.Font = Enum.Font.SourceSansBold
+tabNPC.TextSize = 18
+tabNPC.BorderSizePixel = 0
+tabNPC.Parent = frame
+
+local tabNPCCorner = Instance.new("UICorner")
+tabNPCCorner.CornerRadius = UDim.new(0, 8)
+tabNPCCorner.Parent = tabNPC
+
+local pageBoss = Instance.new("Frame")
+pageBoss.Size = UDim2.new(1, -20, 0, 560)
+pageBoss.Position = UDim2.new(0, 10, 0, 122)
+pageBoss.BackgroundTransparency = 1
+pageBoss.Parent = frame
+
+local pageNPC = Instance.new("Frame")
+pageNPC.Size = UDim2.new(1, -20, 0, 620)
+pageNPC.Position = UDim2.new(0, 10, 0, 122)
+pageNPC.BackgroundTransparency = 1
+pageNPC.Visible = false
+pageNPC.Parent = frame
+
+local function createButton(parent, text, posY, color)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, 34)
+	button.Position = UDim2.new(0, 0, 0, posY)
+	button.BackgroundColor3 = color
+	button.Text = text
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Font = Enum.Font.SourceSansBold
+	button.TextSize = 18
+	button.BorderSizePixel = 0
+	button.Parent = parent
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = button
+
+	return button
+end
+
+local function createLabel(parent, text, posY, sizeY)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, sizeY or 22)
+	label.Position = UDim2.new(0, 0, 0, posY)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = Enum.Font.SourceSans
+	label.TextSize = 18
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = parent
+	return label
+end
+
+local function createBox(parent, posY, placeholder, defaultText)
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(1, 0, 0, 32)
+	box.Position = UDim2.new(0, 0, 0, posY)
+	box.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+	box.Text = defaultText or ""
+	box.PlaceholderText = placeholder or ""
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.Font = Enum.Font.SourceSansBold
+	box.TextSize = 17
+	box.BorderSizePixel = 0
+	box.Parent = parent
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = box
+
+	return box
+end
+
+local function createScrollingList(parent, posY, sizeY)
+	local scroller = Instance.new("ScrollingFrame")
+	scroller.Size = UDim2.new(1, 0, 0, sizeY)
+	scroller.Position = UDim2.new(0, 0, 0, posY)
+	scroller.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+	scroller.BorderSizePixel = 0
+	scroller.ScrollBarThickness = 6
+	scroller.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroller.Parent = parent
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = scroller
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 5)
+	layout.Parent = scroller
+
+	return scroller, layout
+end
+
+-- Página Boss
+local bossSelectedLabel = createLabel(pageBoss, "Boss selecionado: nenhum", 0, 22)
+local bossListTitle = createLabel(pageBoss, "Lista de Bosses:", 26, 20)
+local bossListFrame, bossListLayout = createScrollingList(pageBoss, 50, 120)
+local refreshBossButton = createButton(pageBoss, "Atualizar Bosses", 178, Color3.fromRGB(70, 130, 255))
+local heightLabel = createLabel(pageBoss, "Altura acima do boss:", 220, 20)
+local heightBox = createBox(pageBoss, 245, "30", "30")
+local teleportBossButton = createButton(pageBoss, "Teleportar no Boss", 287, Color3.fromRGB(70, 130, 255))
+local aboveBossButton = createButton(pageBoss, "Ficar Acima do Boss", 329, Color3.fromRGB(50, 180, 120))
+local autoFarmBossButton = createButton(pageBoss, "Auto Farm Boss: OFF", 371, Color3.fromRGB(220, 140, 40))
+local flyButton = createButton(pageBoss, "Fly Livre: OFF", 413, Color3.fromRGB(140, 90, 220))
+local stopAllButton = createButton(pageBoss, "Parar Tudo", 455, Color3.fromRGB(190, 70, 70))
+
+-- Página NPC
+local npcSelectedLabel = createLabel(pageNPC, "NPC selecionado: nenhum", 0, 22)
+local npcListTitle = createLabel(pageNPC, "Lista de NPCs:", 26, 20)
+local npcListFrame, npcListLayout = createScrollingList(pageNPC, 50, 180)
+local refreshNPCButton = createButton(pageNPC, "Atualizar NPCs", 238, Color3.fromRGB(70, 130, 255))
+local npcHeightLabel = createLabel(pageNPC, "Altura acima do NPC:", 280, 20)
+local npcHeightBox = createBox(pageNPC, 305, "20", "20")
+local autoFarmNPCButton = createButton(pageNPC, "Auto Farm NPC: OFF", 347, Color3.fromRGB(220, 140, 40))
+local stopNPCButton = createButton(pageNPC, "Parar Farm NPC", 389, Color3.fromRGB(190, 70, 70))
+
+local configTitle = createLabel(pageNPC, "Config:", 435, 22)
+local equipLabel = createLabel(pageNPC, "Item para auto equipar:", 461, 20)
+local equipBox = createBox(pageNPC, 486, "Ex: Sword", "")
+local autoEquipButton = createButton(pageNPC, "Auto Equip: OFF", 528, Color3.fromRGB(90, 160, 90))
+local keyLabel = createLabel(pageNPC, "Tecla da GUI:", 570, 20)
+local keyBox = createBox(pageNPC, 595, "RightControl", "RightControl")
+local saveKeyButton = createButton(pageNPC, "Salvar Tecla", 637, Color3.fromRGB(80, 120, 200))
+
+local function setStatus(text)
+	if statusLabel.Text ~= text then
+		statusLabel.Text = text
+	end
+end
+
+local function getCharacter()
+	return player.Character or player.CharacterAdded:Wait()
+end
+
+local function getRoot()
+	local character = getCharacter()
+	return character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart")
+end
+
+local function getHumanoid()
+	local character = getCharacter()
+	return character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid")
+end
+
+local function getHeight(box, defaultValue)
+	local n = tonumber(box.Text)
+	if not n then
+		return defaultValue
+	end
+	return math.clamp(n, 5, 300)
+end
+
+local function isAliveModel(model)
+	if not model or not model.Parent then
+		return false
+	end
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local hrp = model:FindFirstChild("HumanoidRootPart")
+	return hum and hrp and hum.Health > 0
+end
+
+local function parseKeyCode(text)
+	if not text or text == "" then
+		return nil
+	end
+
+	local cleaned = string.gsub(text, "%s+", "")
+	local ok, result = pcall(function()
+		return Enum.KeyCode[cleaned]
+	end)
+
+	if ok then
+		return result
+	end
+
+	return nil
+end
+
+local function findToolByNamePart(namePart)
+	if namePart == "" then
+		return nil
+	end
+
+	local needle = string.lower(namePart)
+
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		for _, tool in ipairs(backpack:GetChildren()) do
+			if tool:IsA("Tool") and string.find(string.lower(tool.Name), needle, 1, true) then
+				return tool
+			end
+		end
+	end
+
+	local character = player.Character
+	if character then
+		for _, tool in ipairs(character:GetChildren()) do
+			if tool:IsA("Tool") and string.find(string.lower(tool.Name), needle, 1, true) then
+				return tool
+			end
+		end
+	end
+
+	return nil
+end
+
+local function equipToolByNamePart(namePart)
+	local tool = findToolByNamePart(namePart)
+	if not tool then
+		return false
+	end
+
+	if tool.Parent ~= player.Character then
+		getHumanoid():EquipTool(tool)
+	end
+
+	return true
+end
+
+local function rebuildBossCache()
+	cachedBosses = {}
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and BOSS_NAMES[obj.Name] and isAliveModel(obj) then
+			table.insert(cachedBosses, obj)
+		end
+	end
+
+	table.sort(cachedBosses, function(a, b)
+		return a.Name < b.Name
+	end)
+
+	lastBossCacheTime = os.clock()
+end
+
+local function getBosses(forceRefresh)
+	if forceRefresh or os.clock() - lastBossCacheTime > 1.5 then
+		rebuildBossCache()
+	end
+
+	local alive = {}
+	for _, boss in ipairs(cachedBosses) do
+		if isAliveModel(boss) then
+			table.insert(alive, boss)
+		end
+	end
+	return alive
+end
+
+local function getClosestAliveBoss()
+	local root = getRoot()
+	local bestBoss = nil
+	local bestDist = math.huge
+
+	for _, boss in ipairs(getBosses(false)) do
+		local hrp = boss:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local dist = (hrp.Position - root.Position).Magnitude
+			if dist < bestDist then
+				bestDist = dist
+				bestBoss = boss
+			end
+		end
+	end
+
+	return bestBoss
+end
+
+local function rebuildNPCCache()
+	cachedNPCModels = {}
+
+	for _, name in ipairs(NPC_NAMES) do
+		cachedNPCModels[name] = {}
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and isAliveModel(obj) and cachedNPCModels[obj.Name] then
+			table.insert(cachedNPCModels[obj.Name], obj)
+		end
+	end
+
+	lastNPCCacheTime = os.clock()
+end
+
+local function getAvailableNPCNames(forceRefresh)
+	if forceRefresh or os.clock() - lastNPCCacheTime > 1.5 then
+		rebuildNPCCache()
+	end
+
+	local ordered = {}
+
+	for _, npcName in ipairs(NPC_NAMES) do
+		local foundAlive = false
+		local list = cachedNPCModels[npcName]
+
+		if list then
+			for _, npc in ipairs(list) do
+				if isAliveModel(npc) then
+					foundAlive = true
+					break
+				end
+			end
+		end
+
+		if foundAlive then
+			table.insert(ordered, npcName)
+		end
+	end
+
+	return ordered
+end
+
+local function getClosestAliveNPCByName(npcName)
+	if not npcName or npcName == "" then
+		return nil
+	end
+
+	if os.clock() - lastNPCCacheTime > 1.5 then
+		rebuildNPCCache()
+	end
+
+	local root = getRoot()
+	local closest = nil
+	local closestDistance = math.huge
+	local list = cachedNPCModels[npcName] or {}
+
+	for _, npc in ipairs(list) do
+		if isAliveModel(npc) then
+			local hrp = npc:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local distance = (hrp.Position - root.Position).Magnitude
+				if distance < closestDistance then
+					closestDistance = distance
+					closest = npc
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+local function stopFollowBoss()
+	followBossEnabled = false
+	followBossThread += 1
+end
+
+local function stopAutoFarmBoss()
+	autoFarmBossEnabled = false
+	autoFarmBossThread += 1
+	autoFarmBossButton.Text = "Auto Farm Boss: OFF"
+end
+
+local function stopAutoFarmNPC()
+	autoFarmNPCEnabled = false
+	autoFarmNPCThread += 1
+	autoFarmNPCButton.Text = "Auto Farm NPC: OFF"
+end
+
+local function stopAutoEquip()
+	autoEquipEnabled = false
+	autoEquipThread += 1
+	autoEquipButton.Text = "Auto Equip: OFF"
+end
+
+local function stopFly()
+	flyEnabled = false
+	flyThread += 1
+
+	if flyVelocity then
+		flyVelocity:Destroy()
+		flyVelocity = nil
+	end
+
+	if flyGyro then
+		flyGyro:Destroy()
+		flyGyro = nil
+	end
+
+	local hum = getHumanoid()
+	hum.PlatformStand = false
+	flyButton.Text = "Fly Livre: OFF"
+end
+
+local function stopAll()
+	stopFollowBoss()
+	stopAutoFarmBoss()
+	stopAutoFarmNPC()
+	stopAutoEquip()
+	stopFly()
+	setStatus("Status: parado")
+end
+
+local function updateScrollCanvas(scroller, layout)
+	task.wait()
+	scroller.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+end
+
+local function clearButtons(scroller)
+	for _, child in ipairs(scroller:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+end
+
+local function createListButton(scroller, text, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, -10, 0, 28)
+	button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	button.Text = text
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Font = Enum.Font.SourceSansBold
+	button.TextSize = 17
+	button.BorderSizePixel = 0
+	button.Parent = scroller
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 6)
+	c.Parent = button
+
+	button.MouseButton1Click:Connect(callback)
+end
+
+local function refreshBossList()
+	clearButtons(bossListFrame)
+	local bosses = getBosses(true)
+
+	if #bosses == 0 then
+		createListButton(bossListFrame, "Nenhum boss encontrado", function() end)
+		selectedBoss = nil
+		bossSelectedLabel.Text = "Boss selecionado: nenhum"
+	else
+		for _, boss in ipairs(bosses) do
+			createListButton(bossListFrame, boss.Name, function()
+				selectedBoss = boss
+				bossSelectedLabel.Text = "Boss selecionado: " .. boss.Name
+				setStatus("Status: boss selecionado")
+			end)
+		end
+
+		if not selectedBoss or not isAliveModel(selectedBoss) then
+			selectedBoss = bosses[1]
+			bossSelectedLabel.Text = "Boss selecionado: " .. selectedBoss.Name
+		end
+	end
+
+	updateScrollCanvas(bossListFrame, bossListLayout)
+end
+
+local function refreshNPCList()
+	clearButtons(npcListFrame)
+	local available = getAvailableNPCNames(true)
+
+	if #available == 0 then
+		createListButton(npcListFrame, "Nenhum NPC encontrado", function() end)
+		selectedNPCName = nil
+		npcSelectedLabel.Text = "NPC selecionado: nenhum"
+	else
+		for _, npcName in ipairs(available) do
+			createListButton(npcListFrame, npcName, function()
+				selectedNPCName = npcName
+				npcSelectedLabel.Text = "NPC selecionado: " .. npcName
+				setStatus("Status: npc selecionado")
+			end)
+		end
+
+		if not selectedNPCName then
+			selectedNPCName = available[1]
+			npcSelectedLabel.Text = "NPC selecionado: " .. selectedNPCName
+		end
+	end
+
+	updateScrollCanvas(npcListFrame, npcListLayout)
+end
+
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if input.KeyCode == guiToggleKey then
+		frame.Visible = not frame.Visible
+	end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+	frame.Visible = false
+end)
+
+tabBoss.MouseButton1Click:Connect(function()
+	pageBoss.Visible = true
+	pageNPC.Visible = false
+	tabBoss.BackgroundColor3 = Color3.fromRGB(70, 130, 255)
+	tabNPC.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+end)
+
+tabNPC.MouseButton1Click:Connect(function()
+	pageBoss.Visible = false
+	pageNPC.Visible = true
+	tabBoss.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	tabNPC.BackgroundColor3 = Color3.fromRGB(70, 130, 255)
+end)
+
+refreshBossButton.MouseButton1Click:Connect(function()
+	refreshBossList()
+	setStatus("Status: bosses atualizados")
+end)
+
+teleportBossButton.MouseButton1Click:Connect(function()
+	stopFollowBoss()
+	stopAutoFarmBoss()
+
+	if not selectedBoss or not isAliveModel(selectedBoss) then
+		setStatus("Status: boss morto ou não selecionado")
+		return
+	end
+
+	local bossRoot = selectedBoss:FindFirstChild("HumanoidRootPart")
+	if not bossRoot then
+		setStatus("Status: HRP do boss não encontrado")
+		return
+	end
+
+	getRoot().CFrame = bossRoot.CFrame + Vector3.new(0, 10, 0)
+	setStatus("Status: teleportado no boss")
+end)
+
+aboveBossButton.MouseButton1Click:Connect(function()
+	stopFollowBoss()
+	stopAutoFarmBoss()
+
+	if not selectedBoss or not isAliveModel(selectedBoss) then
+		setStatus("Status: boss morto ou não selecionado")
+		return
+	end
+
+	followBossEnabled = true
+	followBossThread += 1
+	local myThread = followBossThread
+
+	task.spawn(function()
+		while followBossEnabled and myThread == followBossThread do
+			if not selectedBoss or not isAliveModel(selectedBoss) then
+				setStatus("Status: boss morreu")
+				break
+			end
+
+			local bossRoot = selectedBoss:FindFirstChild("HumanoidRootPart")
+			if not bossRoot then
+				setStatus("Status: HRP do boss sumiu")
+				break
+			end
+
+			local targetPos = bossRoot.Position + Vector3.new(0, getHeight(heightBox, 30), 0)
+			getRoot().CFrame = CFrame.new(targetPos)
+			task.wait(0.08)
+		end
+
+		followBossEnabled = false
+	end)
+
+	setStatus("Status: acima do boss")
+end)
+
+autoFarmBossButton.MouseButton1Click:Connect(function()
+	if autoFarmBossEnabled then
+		stopAutoFarmBoss()
+		setStatus("Status: auto farm boss desligado")
+		return
+	end
+
+	stopFollowBoss()
+	stopFly()
+
+	autoFarmBossEnabled = true
+	autoFarmBossThread += 1
+	local myThread = autoFarmBossThread
+	autoFarmBossButton.Text = "Auto Farm Boss: ON"
+
+	task.spawn(function()
+		while autoFarmBossEnabled and myThread == autoFarmBossThread do
+			if not selectedBoss or not isAliveModel(selectedBoss) then
+				selectedBoss = getClosestAliveBoss()
+				if selectedBoss then
+					bossSelectedLabel.Text = "Boss selecionado: " .. selectedBoss.Name
+				else
+					setStatus("Status: esperando boss vivo")
+					task.wait(0.6)
+					continue
+				end
+			end
+
+			local hrp = selectedBoss:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local targetPos = hrp.Position + Vector3.new(0, getHeight(heightBox, 30), 0)
+				getRoot().CFrame = CFrame.new(targetPos)
+				setStatus("Status: auto farm boss em " .. selectedBoss.Name)
+			end
+
+			task.wait(0.08)
+		end
+	end)
+end)
+
+refreshNPCButton.MouseButton1Click:Connect(function()
+	refreshNPCList()
+	setStatus("Status: npcs atualizados")
+end)
+
+autoFarmNPCButton.MouseButton1Click:Connect(function()
+	if autoFarmNPCEnabled then
+		stopAutoFarmNPC()
+		setStatus("Status: auto farm npc desligado")
+		return
+	end
+
+	if not selectedNPCName then
+		setStatus("Status: selecione um npc")
+		return
+	end
+
+	stopFly()
+
+	autoFarmNPCEnabled = true
+	autoFarmNPCThread += 1
+	local myThread = autoFarmNPCThread
+	autoFarmNPCButton.Text = "Auto Farm NPC: ON"
+
+	task.spawn(function()
+		while autoFarmNPCEnabled and myThread == autoFarmNPCThread do
+			if not selectedNPCName or selectedNPCName == "" then
+				setStatus("Status: npc inválido")
+				task.wait(0.5)
+				continue
+			end
+
+			local targetNPC = getClosestAliveNPCByName(selectedNPCName)
+
+			if not targetNPC then
+				setStatus("Status: esperando npc " .. selectedNPCName)
+				task.wait(0.25)
+				continue
+			end
+
+			local hrp = targetNPC:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local targetPos = hrp.Position + Vector3.new(0, getHeight(npcHeightBox, 20), 0)
+				getRoot().CFrame = CFrame.new(targetPos)
+				setStatus("Status: farmando " .. targetNPC.Name)
+			end
+
+			task.wait(0.08)
+		end
+	end)
+end)
+
+stopNPCButton.MouseButton1Click:Connect(function()
+	stopAutoFarmNPC()
+	setStatus("Status: farm npc parado")
+end)
+
+autoEquipButton.MouseButton1Click:Connect(function()
+	if autoEquipEnabled then
+		stopAutoEquip()
+		setStatus("Status: auto equip desligado")
+		return
+	end
+
+	autoEquipEnabled = true
+	autoEquipThread += 1
+	local myThread = autoEquipThread
+	autoEquipButton.Text = "Auto Equip: ON"
+
+	task.spawn(function()
+		while autoEquipEnabled and myThread == autoEquipThread do
+			local itemName = equipBox.Text or ""
+			if itemName ~= "" then
+				if equipToolByNamePart(itemName) then
+					setStatus("Status: item equipado")
+				end
+			end
+			task.wait(0.8)
+		end
+	end)
+end)
+
+saveKeyButton.MouseButton1Click:Connect(function()
+	local keyCode = parseKeyCode(keyBox.Text)
+	if not keyCode then
+		setStatus("Status: tecla inválida")
+		return
+	end
+
+	guiToggleKey = keyCode
+	keyBox.Text = guiToggleKey.Name
+	setStatus("Status: tecla salva em " .. guiToggleKey.Name)
+end)
+
+flyButton.MouseButton1Click:Connect(function()
+	if flyEnabled then
+		stopFly()
+		setStatus("Status: fly desligado")
+		return
+	end
+
+	stopFollowBoss()
+	stopAutoFarmBoss()
+	stopAutoFarmNPC()
+
+	local root = getRoot()
+	local humanoid = getHumanoid()
+
+	flyEnabled = true
+	flyThread += 1
+	local myThread = flyThread
+
+	humanoid.PlatformStand = true
+
+	flyGyro = Instance.new("BodyGyro")
+	flyGyro.P = 9e4
+	flyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+	flyGyro.CFrame = root.CFrame
+	flyGyro.Parent = root
+
+	flyVelocity = Instance.new("BodyVelocity")
+	flyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	flyVelocity.Velocity = Vector3.zero
+	flyVelocity.Parent = root
+
+	task.spawn(function()
+		while flyEnabled and myThread == flyThread do
+			local camera = workspace.CurrentCamera
+			local moveDirection = Vector3.zero
+			local speed = 70
+
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+				moveDirection += camera.CFrame.LookVector
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+				moveDirection -= camera.CFrame.LookVector
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+				moveDirection -= camera.CFrame.RightVector
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+				moveDirection += camera.CFrame.RightVector
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+				moveDirection += Vector3.new(0, 1, 0)
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+				moveDirection -= Vector3.new(0, 1, 0)
+			end
+
+			if moveDirection.Magnitude > 0 then
+				moveDirection = moveDirection.Unit
+			end
+
+			if flyGyro and flyVelocity then
+				flyGyro.CFrame = camera.CFrame
+				flyVelocity.Velocity = moveDirection * speed
+			end
+
+			task.wait(0.03)
+		end
+	end)
+
+	flyButton.Text = "Fly Livre: ON"
+	setStatus("Status: fly ligado")
+end)
+
+stopAllButton.MouseButton1Click:Connect(function()
+	stopAll()
+end)
+
+bossListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	updateScrollCanvas(bossListFrame, bossListLayout)
+end)
+
+npcListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	updateScrollCanvas(npcListFrame, npcListLayout)
+end)
+
+refreshBossList()
+refreshNPCList()
