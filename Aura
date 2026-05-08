@@ -1,9 +1,70 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local isMobile = UserInputService.TouchEnabled
+local CONFIG_FILE = "FarmHubConfig.json"
+local autoExecuteEnabled = false
+
+local currentTheme = "Cyber Blue"
+local compactModeEnabled = false
+local savedFramePosition = nil
+local manualNoClipEnabled = false
+local speedValue = 16
+
+local THEMES = {
+    ["Cyber Blue"] = {
+        Main = Color3.fromRGB(8, 18, 32),
+        Top = Color3.fromRGB(14, 34, 58),
+        Sidebar = Color3.fromRGB(12, 28, 48),
+        Card = Color3.fromRGB(18, 38, 62),
+        Box = Color3.fromRGB(14, 30, 52),
+        Button = Color3.fromRGB(45, 125, 255),
+        ButtonDark = Color3.fromRGB(20, 48, 82),
+        Text = Color3.fromRGB(240, 248, 255),
+        AccentText = Color3.fromRGB(170, 220, 255),
+        Stroke = Color3.fromRGB(110, 180, 255),
+        ON = Color3.fromRGB(40, 220, 140),
+        OFF = Color3.fromRGB(220, 80, 80),
+        Warn = Color3.fromRGB(245, 170, 55),
+        Purple = Color3.fromRGB(120, 70, 180),
+    },
+    ["Shadow Dark"] = {
+        Main = Color3.fromRGB(10, 10, 16),
+        Top = Color3.fromRGB(18, 18, 28),
+        Sidebar = Color3.fromRGB(14, 14, 24),
+        Card = Color3.fromRGB(22, 22, 34),
+        Box = Color3.fromRGB(16, 16, 26),
+        Button = Color3.fromRGB(100, 85, 255),
+        ButtonDark = Color3.fromRGB(34, 32, 52),
+        Text = Color3.fromRGB(245, 245, 255),
+        AccentText = Color3.fromRGB(190, 180, 255),
+        Stroke = Color3.fromRGB(130, 120, 255),
+        ON = Color3.fromRGB(60, 220, 150),
+        OFF = Color3.fromRGB(230, 75, 95),
+        Warn = Color3.fromRGB(240, 165, 70),
+        Purple = Color3.fromRGB(125, 80, 210),
+    },
+    ["Frost White"] = {
+        Main = Color3.fromRGB(232, 242, 255),
+        Top = Color3.fromRGB(205, 225, 255),
+        Sidebar = Color3.fromRGB(215, 232, 255),
+        Card = Color3.fromRGB(245, 250, 255),
+        Box = Color3.fromRGB(230, 240, 255),
+        Button = Color3.fromRGB(35, 120, 235),
+        ButtonDark = Color3.fromRGB(180, 210, 250),
+        Text = Color3.fromRGB(18, 36, 62),
+        AccentText = Color3.fromRGB(25, 95, 180),
+        Stroke = Color3.fromRGB(90, 150, 230),
+        ON = Color3.fromRGB(35, 185, 120),
+        OFF = Color3.fromRGB(215, 70, 85),
+        Warn = Color3.fromRGB(225, 145, 35),
+        Purple = Color3.fromRGB(115, 75, 200),
+    }
+}
+
 local oldGui = playerGui:FindFirstChild("MultiFarmGUI")
 if oldGui then
     oldGui:Destroy()
@@ -30,33 +91,140 @@ local BOSS_NAMES = {
     ["Saber"] = true,
     ["Rimuru"] = true,
 }
+
+local DUNGEON_NPC_NAMES = {
+    "Shadow",
+    "Alpha",
+    "Beta",
+    "Gamma",
+    "Delta",
+    "Epsilon",
+    "Eta",
+    "Zeta",
+}
+
+local DUNGEON_NPC_NAME_SET = {}
+for _, dungeonNPCName in ipairs(DUNGEON_NPC_NAMES) do
+    DUNGEON_NPC_NAME_SET[dungeonNPCName] = true
+end
+
 local guiToggleKey = Enum.KeyCode.RightControl
 local selectedBoss = nil
 local selectedNPCName = NPC_NAMES[1]
+local currentNPC = nil
+
+-- Cache para evitar micro-lags causados por workspace:GetDescendants() repetido.
+local NPC_NAME_SET = {}
+for _, npcName in ipairs(NPC_NAMES) do
+    NPC_NAME_SET[npcName] = true
+end
+
+local npcCache = {}
+local bossCache = {}
+local dungeonCache = {}
+local cacheReady = false
+
+local function removeFromList(list, item)
+    for i = #list, 1, -1 do
+        if list[i] == item then
+            table.remove(list, i)
+        end
+    end
+end
+
+local function addCachedModel(model)
+    if not model:IsA("Model") then return end
+
+    if NPC_NAME_SET[model.Name] then
+        npcCache[model.Name] = npcCache[model.Name] or {}
+        table.insert(npcCache[model.Name], model)
+    elseif BOSS_NAMES[model.Name] then
+        table.insert(bossCache, model)
+    elseif DUNGEON_NPC_NAME_SET[model.Name] then
+        table.insert(dungeonCache, model)
+    end
+end
+
+local function removeCachedModel(model)
+    if not model:IsA("Model") then return end
+
+    if NPC_NAME_SET[model.Name] and npcCache[model.Name] then
+        removeFromList(npcCache[model.Name], model)
+    elseif BOSS_NAMES[model.Name] then
+        removeFromList(bossCache, model)
+    elseif DUNGEON_NPC_NAME_SET[model.Name] then
+        removeFromList(dungeonCache, model)
+    end
+end
+
+local function buildMobCache()
+    if cacheReady then return end
+    cacheReady = true
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        addCachedModel(obj)
+    end
+
+    workspace.DescendantAdded:Connect(function(obj)
+        addCachedModel(obj)
+    end)
+
+    workspace.DescendantRemoving:Connect(function(obj)
+        removeCachedModel(obj)
+    end)
+end
+
 local farmMode = "Above"
 local autoFarmBossEnabled = false
 local autoFarmNPCEnabled = false
 local autoAttackEnabled = false
 local autoEquipEnabled = false
 local priorityEnabled = false
+local autoDungeonEnabled = false
+local currentDungeonNPC = nil
 local bossThread = 0
 local npcThread = 0
 local attackThread = 0
 local equipThread = 0
 local priorityThread = 0
+local dungeonThread = 0
 local bodyPosition = nil
 local bodyGyro = nil
 local noclipConnection = nil
 local function getCharacter()
-    return player.Character or player.CharacterAdded:Wait()
+    while true do
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if character and character.Parent and humanoid and humanoid.Health > 0 and root then
+            return character
+        end
+
+        task.wait(0.2)
+    end
 end
+
 local function getRoot()
     local character = getCharacter()
-    return character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart")
+    return character:FindFirstChild("HumanoidRootPart")
 end
+
 local function getHumanoid()
     local character = getCharacter()
-    return character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid")
+    return character:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRootSafe()
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if character and character.Parent and humanoid and humanoid.Health > 0 and root then
+        return root
+    end
+
+    return nil
 end
 
 local function isAlive(model)
@@ -164,6 +332,13 @@ local function clearSmoothHold()
     end
 end
 
+player.CharacterAdded:Connect(function()
+    currentNPC = nil
+    currentDungeonNPC = nil
+    bodyPosition = nil
+    bodyGyro = nil
+end)
+
 local function findTool(namePart)
     local character = player.Character
     local backpack = player:FindFirstChild("Backpack")
@@ -213,10 +388,14 @@ local function equipTool(namePart)
 end
 
 local function getBosses()
+    buildMobCache()
     local bosses = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and BOSS_NAMES[obj.Name] and isAlive(obj) then
-            table.insert(bosses, obj)
+    for i = #bossCache, 1, -1 do
+        local boss = bossCache[i]
+        if isAlive(boss) then
+            table.insert(bosses, boss)
+        else
+            table.remove(bossCache, i)
         end
     end
     table.sort(bosses, function(a, b)
@@ -226,19 +405,27 @@ local function getBosses()
 end
 
 local function getClosestBoss()
+    buildMobCache()
     local root = getRoot()
     local best = nil
     local bestDist = math.huge
-    for _, boss in ipairs(getBosses()) do
-        local hrp = boss:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local dist = (hrp.Position - root.Position).Magnitude
-            if dist < bestDist then
-                bestDist = dist
-                best = boss
+
+    for i = #bossCache, 1, -1 do
+        local boss = bossCache[i]
+        if isAlive(boss) then
+            local hrp = boss:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = boss
+                end
             end
+        else
+            table.remove(bossCache, i)
         end
     end
+
     return best
 end
 
@@ -246,11 +433,21 @@ local function getClosestNPCByName(name)
     if not name or name == "" then
         return nil
     end
+
+    buildMobCache()
+
     local root = getRoot()
+    local list = npcCache[name]
     local best = nil
     local bestDist = math.huge
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name == name and isAlive(obj) then
+
+    if not list then
+        return nil
+    end
+
+    for i = #list, 1, -1 do
+        local obj = list[i]
+        if isAlive(obj) and obj.Name == name then
             local hrp = obj:FindFirstChild("HumanoidRootPart")
             if hrp then
                 local dist = (hrp.Position - root.Position).Magnitude
@@ -259,8 +456,37 @@ local function getClosestNPCByName(name)
                     best = obj
                 end
             end
+        else
+            table.remove(list, i)
         end
     end
+
+    return best
+end
+
+local function getClosestDungeonNPC()
+    buildMobCache()
+
+    local root = getRoot()
+    local best = nil
+    local bestDist = math.huge
+
+    for i = #dungeonCache, 1, -1 do
+        local obj = dungeonCache[i]
+        if isAlive(obj) and DUNGEON_NPC_NAME_SET[obj.Name] then
+            local hrp = obj:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = obj
+                end
+            end
+        else
+            table.remove(dungeonCache, i)
+        end
+    end
+
     return best
 end
 
@@ -273,7 +499,7 @@ end
 
 local function stroke(obj, color, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color or Color3.fromRGB(70, 90, 130)
+    s.Color = color or Color3.fromRGB(110, 180, 255)
     s.Transparency = transparency or 0.55
     s.Thickness = 1
     s.Parent = obj
@@ -294,7 +520,7 @@ local function makeLabel(parent, text, size, color)
     local label = Instance.new("TextLabel")
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = color or Color3.fromRGB(235, 240, 255)
+    label.TextColor3 = color or Color3.fromRGB(240, 248, 255)
     label.Font = Enum.Font.GothamBold
     label.TextSize = size or (isMobile and 11 or 13)
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -308,7 +534,7 @@ end
 local function makeButton(parent, text, color, height)
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(1, 0, 0, height or (isMobile and 34 or 38))
-    button.BackgroundColor3 = color or Color3.fromRGB(35, 45, 65)
+    button.BackgroundColor3 = color or Color3.fromRGB(45, 125, 255)
     button.Text = text
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.Font = Enum.Font.GothamBold
@@ -318,14 +544,14 @@ local function makeButton(parent, text, color, height)
     button.ZIndex = 20
     button.Parent = parent
     corner(button, 9)
-    stroke(button, Color3.fromRGB(90, 110, 150), 0.68)
+    stroke(button, Color3.fromRGB(110, 180, 255), 0.68)
     return button
 end
 
 local function makeBox(parent, placeholder, value)
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(1, 0, 0, isMobile and 34 or 38)
-    box.BackgroundColor3 = Color3.fromRGB(20, 27, 42)
+    box.BackgroundColor3 = Color3.fromRGB(14, 30, 52)
     box.Text = value or ""
     box.PlaceholderText = placeholder or ""
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -337,7 +563,7 @@ local function makeBox(parent, placeholder, value)
     box.ZIndex = 20
     box.Parent = parent
     corner(box, 9)
-    stroke(box, Color3.fromRGB(90, 110, 150), 0.7)
+    stroke(box, Color3.fromRGB(110, 180, 255), 0.7)
     padding(box, 10, 10, 0, 0)
     return box
 end
@@ -345,12 +571,12 @@ end
 local function makeCard(parent, title)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, 0, 0, 80)
-    card.BackgroundColor3 = Color3.fromRGB(15, 21, 34)
+    card.BackgroundColor3 = Color3.fromRGB(18, 38, 62)
     card.BorderSizePixel = 0
     card.ZIndex = 15
     card.Parent = parent
     corner(card, 14)
-    stroke(card, Color3.fromRGB(80, 105, 150), 0.6)
+    stroke(card, Color3.fromRGB(110, 180, 255), 0.6)
     padding(card, 12, 12, 10, 12)
 
     local layout = Instance.new("UIListLayout")
@@ -358,7 +584,7 @@ local function makeCard(parent, title)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = card
 
-    local titleLabel = makeLabel(card, title, isMobile and 12 or 15, Color3.fromRGB(115, 185, 255))
+    local titleLabel = makeLabel(card, title, isMobile and 12 or 15, Color3.fromRGB(170, 220, 255))
     titleLabel.LayoutOrder = 1
 
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -374,7 +600,7 @@ local function makeDropdown(parent, title, options, defaultValue, callback)
     container.ClipsDescendants = false
     container.Parent = parent
 
-    local main = makeButton(container, title .. ": " .. tostring(defaultValue or "None") .. " ▼", Color3.fromRGB(35, 95, 180))
+    local main = makeButton(container, title .. ": " .. tostring(defaultValue or "None") .. " ▼", Color3.fromRGB(45, 125, 255))
     main.Size = UDim2.new(1, 0, 0, isMobile and 34 or 38)
     main.ZIndex = 40
 
@@ -388,7 +614,7 @@ local function makeDropdown(parent, title, options, defaultValue, callback)
     drop.ZIndex = 50
     drop.Parent = container
     corner(drop, 10)
-    stroke(drop, Color3.fromRGB(70, 95, 145), 0.55)
+    stroke(drop, Color3.fromRGB(110, 180, 255), 0.55)
 
     local scroll = Instance.new("ScrollingFrame")
     scroll.Size = UDim2.new(1, 0, 1, 0)
@@ -466,7 +692,7 @@ screenGui.Parent = playerGui
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = isMobile and UDim2.new(0, 58, 0, 58) or UDim2.new(0, 46, 0, 46)
 toggleButton.Position = isMobile and UDim2.new(0, 14, 0.5, -29) or UDim2.new(0, 18, 0.5, -23)
-toggleButton.BackgroundColor3 = Color3.fromRGB(25, 105, 235)
+toggleButton.BackgroundColor3 = Color3.fromRGB(45, 125, 255)
 toggleButton.Text = "≡"
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.GothamBold
@@ -480,29 +706,33 @@ stroke(toggleButton, Color3.fromRGB(180, 215, 255), 0.3)
 local frame = Instance.new("Frame")
 frame.Size = isMobile and UDim2.new(0.90, 0, 0.72, 0) or UDim2.new(0, 620, 0, 455)
 frame.Position = isMobile and UDim2.new(0.05, 0, 0.14, 0) or UDim2.new(0.5, -310, 0.5, -227)
-frame.BackgroundColor3 = Color3.fromRGB(9, 12, 20)
+local defaultFrameSize = frame.Size
+local defaultFramePosition = frame.Position
+local compactFrameSize = isMobile and UDim2.new(0.78, 0, 0.58, 0) or UDim2.new(0, 500, 0, 380)
+local compactFramePosition = isMobile and UDim2.new(0.11, 0, 0.20, 0) or UDim2.new(0.5, -250, 0.5, -190)
+frame.BackgroundColor3 = Color3.fromRGB(8, 18, 32)
 frame.BorderSizePixel = 0
 frame.ClipsDescendants = true
 frame.ZIndex = 10
 frame.Parent = screenGui
 corner(frame, 18)
-stroke(frame, Color3.fromRGB(95, 135, 200), 0.35)
+stroke(frame, Color3.fromRGB(110, 180, 255), 0.35)
 
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, isMobile and 46 or 52)
-topBar.BackgroundColor3 = Color3.fromRGB(7, 10, 18)
+topBar.BackgroundColor3 = Color3.fromRGB(14, 34, 58)
 topBar.BorderSizePixel = 0
 topBar.ZIndex = 11
 topBar.Parent = frame
 
-local titleText = makeLabel(topBar, "Farm Hub", isMobile and 17 or 20, Color3.fromRGB(115, 185, 255))
+local titleText = makeLabel(topBar, "Onyx", isMobile and 17 or 20, Color3.fromRGB(170, 220, 255))
 titleText.Size = UDim2.new(1, -60, 1, 0)
 titleText.Position = UDim2.new(0, 14, 0, 0)
 
 local closeButton = Instance.new("TextButton")
 closeButton.Size = UDim2.new(0, isMobile and 34 or 38, 0, isMobile and 32 or 34)
 closeButton.Position = UDim2.new(1, isMobile and -42 or -48, 0, isMobile and 7 or 9)
-closeButton.BackgroundColor3 = Color3.fromRGB(145, 45, 55)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
 closeButton.Text = "×"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.Font = Enum.Font.GothamBold
@@ -521,7 +751,7 @@ body.Parent = frame
 
 local sidebar = Instance.new("Frame")
 sidebar.Size = isMobile and UDim2.new(0, 86, 1, 0) or UDim2.new(0, 110, 1, 0)
-sidebar.BackgroundColor3 = Color3.fromRGB(12, 17, 28)
+sidebar.BackgroundColor3 = Color3.fromRGB(12, 28, 48)
 sidebar.BorderSizePixel = 0
 sidebar.ZIndex = 13
 sidebar.Parent = body
@@ -533,7 +763,7 @@ sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
 sideLayout.Parent = sidebar
 
 local function sideTab(text, order)
-    local b = makeButton(sidebar, text, Color3.fromRGB(25, 34, 52), isMobile and 34 or 38)
+    local b = makeButton(sidebar, text, Color3.fromRGB(20, 48, 82), isMobile and 34 or 38)
     b.LayoutOrder = order
     return b
 end
@@ -542,7 +772,8 @@ local tabBoss = sideTab("⚔ Boss", 1)
 local tabNPC = sideTab("♟ NPC", 2)
 local tabPriority = sideTab("★ Prio", 3)
 local tabTeleport = sideTab("◇ TP", 4)
-local tabConfig = sideTab("⚙ Config", 5)
+local tabDungeons = sideTab("☠ Dungeons", 5)
+local tabConfig = sideTab("⚙ Config", 6)
 
 local content = Instance.new("Frame")
 content.Size = isMobile and UDim2.new(1, -86, 1, 0) or UDim2.new(1, -110, 1, 0)
@@ -555,12 +786,12 @@ padding(content, 10, 10, 8, 8)
 local statusBox = Instance.new("Frame")
 statusBox.Size = UDim2.new(1, -20, 0, 26)
 statusBox.Position = UDim2.new(0, 10, 1, -30)
-statusBox.BackgroundColor3 = Color3.fromRGB(14, 22, 34)
+statusBox.BackgroundColor3 = Color3.fromRGB(18, 38, 62)
 statusBox.BorderSizePixel = 0
 statusBox.ZIndex = 18
 statusBox.Parent = frame
 corner(statusBox, 9)
-stroke(statusBox, Color3.fromRGB(60, 95, 140), 0.65)
+stroke(statusBox, Color3.fromRGB(110, 180, 255), 0.65)
 
 local statusLabel = makeLabel(statusBox, "● Ready", isMobile and 10 or 12, Color3.fromRGB(120, 255, 190))
 statusLabel.Size = UDim2.new(1, -14, 1, 0)
@@ -596,6 +827,7 @@ local pageBoss = makePage()
 local pageNPC = makePage()
 local pagePriority = makePage()
 local pageTeleport = makePage()
+local pageDungeons = makePage()
 local pageConfig = makePage()
 
 local bossTargetCard = makeCard(pageBoss, "🎯 Boss Target")
@@ -610,7 +842,7 @@ local bossDropdown = makeDropdown(bossTargetCard, "Select Boss", {"None"}, "None
         end
     end
 end)
-local refreshBossButton = makeButton(bossTargetCard, "Refresh Bosses", Color3.fromRGB(35, 95, 180))
+local refreshBossButton = makeButton(bossTargetCard, "Refresh Bosses", Color3.fromRGB(45, 125, 255))
 
 local bossFarmCard = makeCard(pageBoss, "🔥 Boss Farm")
 makeLabel(bossFarmCard, "Distance / Height")
@@ -623,19 +855,20 @@ local bossRowLayout = Instance.new("UIListLayout")
 bossRowLayout.FillDirection = Enum.FillDirection.Horizontal
 bossRowLayout.Padding = UDim.new(0, 6)
 bossRowLayout.Parent = bossRow
-local teleportBossButton = makeButton(bossRow, "TP Boss", Color3.fromRGB(35, 95, 180))
+local teleportBossButton = makeButton(bossRow, "TP Boss", Color3.fromRGB(45, 125, 255))
 teleportBossButton.Size = UDim2.new(0.5, -3, 1, 0)
-local autoFarmBossButton = makeButton(bossRow, "Boss: OFF", Color3.fromRGB(180, 115, 36))
+local autoFarmBossButton = makeButton(bossRow, "Boss: OFF", Color3.fromRGB(245, 170, 55))
 autoFarmBossButton.Size = UDim2.new(0.5, -3, 1, 0)
 
 local npcTargetCard = makeCard(pageNPC, "🎯 NPC Target")
 local npcSelectedLabel = makeLabel(npcTargetCard, "NPC selected: " .. selectedNPCName)
 local npcDropdown = makeDropdown(npcTargetCard, "Select NPC", NPC_NAMES, selectedNPCName, function(option)
     selectedNPCName = option
+    currentNPC = nil
     npcSelectedLabel.Text = "NPC selected: " .. option
     setStatus("NPC selected: " .. option)
 end)
-local refreshNPCButton = makeButton(npcTargetCard, "Refresh NPCs", Color3.fromRGB(35, 95, 180))
+local refreshNPCButton = makeButton(npcTargetCard, "Refresh NPCs", Color3.fromRGB(45, 125, 255))
 
 local npcFarmCard = makeCard(pageNPC, "⚔ NPC Farm")
 makeLabel(npcFarmCard, "Distance / Height")
@@ -648,9 +881,9 @@ local npcRowLayout = Instance.new("UIListLayout")
 npcRowLayout.FillDirection = Enum.FillDirection.Horizontal
 npcRowLayout.Padding = UDim.new(0, 6)
 npcRowLayout.Parent = npcRow
-local autoFarmNPCButton = makeButton(npcRow, "NPC: OFF", Color3.fromRGB(180, 115, 36))
+local autoFarmNPCButton = makeButton(npcRow, "NPC: OFF", Color3.fromRGB(245, 170, 55))
 autoFarmNPCButton.Size = UDim2.new(0.5, -3, 1, 0)
-local autoAttackButton = makeButton(npcRow, "Attack: OFF", Color3.fromRGB(170, 70, 70))
+local autoAttackButton = makeButton(npcRow, "Attack: OFF", Color3.fromRGB(220, 80, 80))
 autoAttackButton.Size = UDim2.new(0.5, -3, 1, 0)
 
 local equipCard = makeCard(pageNPC, "🧰 Equipment")
@@ -659,8 +892,8 @@ local autoEquipButton = makeButton(equipCard, "Auto Equip: OFF", Color3.fromRGB(
 local priorityBossEnabled = true
 local priorityNPCEnabled = true
 local priorityCard = makeCard(pagePriority, "★ Priority")
-local priorityBossButton = makeButton(priorityCard, "Boss Priority: ON", Color3.fromRGB(170, 70, 70))
-local priorityNPCButton = makeButton(priorityCard, "NPC Priority: ON", Color3.fromRGB(180, 115, 36))
+local priorityBossButton = makeButton(priorityCard, "Boss Priority: ON", Color3.fromRGB(220, 80, 80))
+local priorityNPCButton = makeButton(priorityCard, "NPC Priority: ON", Color3.fromRGB(245, 170, 55))
 local priorityRow = Instance.new("Frame")
 priorityRow.Size = UDim2.new(1, 0, 0, isMobile and 34 or 38)
 priorityRow.BackgroundTransparency = 1
@@ -676,8 +909,19 @@ stopPriorityButton.Size = UDim2.new(0.5, -3, 1, 0)
 
 local teleportCard = makeCard(pageTeleport, "◇ Teleport")
 makeLabel(teleportCard, "Teleport tab ready. We will add buttons later.")
-makeButton(teleportCard, "Coming Soon", Color3.fromRGB(35, 95, 180))
+makeButton(teleportCard, "Coming Soon", Color3.fromRGB(45, 125, 255))
 
+local dungeonsCard = makeCard(pageDungeons, "☠ Dungeons")
+makeLabel(dungeonsCard, "Targets: Shadow, Alpha, Beta, Gamma, Delta, Epsilon, Eta, Zeta")
+makeLabel(dungeonsCard, "Distance / Height")
+local dungeonHeightBox = makeBox(dungeonsCard, "Distance", "20")
+local autoDungeonButton = makeButton(dungeonsCard, "Auto Dungeon: OFF", Color3.fromRGB(120, 45, 180))
+
+local applyTheme
+local saveConfig
+local updateMovementButtons
+local applySpeed
+local setManualNoClip
 local configCard = makeCard(pageConfig, "⚙ Config")
 local keyBox = makeBox(configCard, "RightControl", "RightControl")
 local saveKeyButton = makeButton(configCard, "Save Key", Color3.fromRGB(70, 105, 175))
@@ -688,6 +932,289 @@ local farmModeDropdown = makeDropdown(configCard, "Farm Mode", {"Above", "Behind
 end)
 makeLabel(configCard, "Mobile: drag the blue button.")
 
+local saveConfigButton = makeButton(configCard, "💾 Save Config", Color3.fromRGB(45, 135, 92))
+local loadConfigButton = makeButton(configCard, "📂 Load Config", Color3.fromRGB(45, 95, 180))
+local autoExecuteButton = makeButton(configCard, "Auto Execute: OFF", Color3.fromRGB(120, 70, 180))
+local themeDropdown = makeDropdown(configCard, "Theme", {"Cyber Blue", "Shadow Dark", "Frost White"}, currentTheme, function(option)
+    currentTheme = option
+    if themeDropdown and themeDropdown.Button then
+        themeDropdown.Button.Text = "Theme: " .. option .. " ▼"
+    end
+    if applyTheme then
+        applyTheme(option)
+    end
+    if saveConfig then
+        saveConfig()
+    else
+        setStatus("Theme: " .. option)
+    end
+end)
+local compactModeButton = makeButton(configCard, "Compact Mode: OFF", Color3.fromRGB(45, 95, 180))
+local resetUiButton = makeButton(configCard, "Reset UI Position", Color3.fromRGB(120, 70, 180))
+local movementCard = makeCard(pageConfig, "🕹 Movement")
+local noclipButton = makeButton(movementCard, "Noclip: OFF", Color3.fromRGB(120, 70, 180))
+local speedLabel = makeLabel(movementCard, "Speed: " .. speedValue)
+
+local speedRow = Instance.new("Frame")
+speedRow.Size = UDim2.new(1, 0, 0, isMobile and 34 or 38)
+speedRow.BackgroundTransparency = 1
+speedRow.Parent = movementCard
+
+local speedRowLayout = Instance.new("UIListLayout")
+speedRowLayout.FillDirection = Enum.FillDirection.Horizontal
+speedRowLayout.Padding = UDim.new(0, 6)
+speedRowLayout.Parent = speedRow
+
+local speedMinusButton = makeButton(speedRow, "- Speed", Color3.fromRGB(220, 80, 80))
+speedMinusButton.Size = UDim2.new(0.33, -4, 1, 0)
+
+local speedPlusButton = makeButton(speedRow, "+ Speed", Color3.fromRGB(40, 220, 140))
+speedPlusButton.Size = UDim2.new(0.33, -4, 1, 0)
+
+local speedResetButton = makeButton(speedRow, "Reset", Color3.fromRGB(45, 125, 255))
+speedResetButton.Size = UDim2.new(0.34, -4, 1, 0)
+
+local autoExecuteUrlBox = makeBox(configCard, "Raw script link for auto execute", "")
+
+local function updateAutoExecuteButton()
+    autoExecuteButton.Text = "Auto Execute: " .. (autoExecuteEnabled and "ON" or "OFF")
+    autoExecuteButton.BackgroundColor3 = autoExecuteEnabled
+        and Color3.fromRGB(40, 220, 140)
+        or Color3.fromRGB(120, 70, 180)
+end
+
+local function updateCompactModeButton()
+    compactModeButton.Text = "Compact Mode: " .. (compactModeEnabled and "ON" or "OFF")
+    compactModeButton.BackgroundColor3 = compactModeEnabled
+        and Color3.fromRGB(40, 220, 140)
+        or Color3.fromRGB(45, 95, 180)
+end
+
+local function encodeUDim2(value)
+    return {
+        xs = value.X.Scale,
+        xo = value.X.Offset,
+        ys = value.Y.Scale,
+        yo = value.Y.Offset
+    }
+end
+
+local function decodeUDim2(data)
+    if type(data) ~= "table" then
+        return nil
+    end
+    return UDim2.new(tonumber(data.xs) or 0, tonumber(data.xo) or 0, tonumber(data.ys) or 0, tonumber(data.yo) or 0)
+end
+
+local function applyGuiLayout(useSavedPosition)
+    frame.Size = compactModeEnabled and compactFrameSize or defaultFrameSize
+    if useSavedPosition and savedFramePosition then
+        frame.Position = savedFramePosition
+    elseif compactModeEnabled then
+        frame.Position = compactFramePosition
+    else
+        frame.Position = defaultFramePosition
+    end
+end
+
+updateMovementButtons = function()
+    local t = THEMES[currentTheme] or THEMES["Cyber Blue"]
+    if noclipButton then
+        noclipButton.Text = "Noclip: " .. (manualNoClipEnabled and "ON" or "OFF")
+        noclipButton.BackgroundColor3 = manualNoClipEnabled and t.ON or t.Purple
+    end
+    if speedLabel then
+        speedLabel.Text = "Speed: " .. tostring(speedValue)
+    end
+end
+
+applySpeed = function()
+    local hum = nil
+    pcall(function()
+        hum = getHumanoid()
+    end)
+    if hum then
+        hum.WalkSpeed = speedValue
+    end
+    updateMovementButtons()
+end
+
+setManualNoClip = function(value)
+    manualNoClipEnabled = value == true
+    if manualNoClipEnabled then
+        enableNoClip()
+    elseif farmMode ~= "Below" then
+        disableNoClip()
+    end
+    updateMovementButtons()
+end
+
+applyTheme = function(themeName)
+    currentTheme = THEMES[themeName] and themeName or "Cyber Blue"
+    local t = THEMES[currentTheme]
+
+    frame.BackgroundColor3 = t.Main
+    topBar.BackgroundColor3 = t.Top
+    sidebar.BackgroundColor3 = t.Sidebar
+    statusBox.BackgroundColor3 = t.Card
+    titleText.TextColor3 = t.AccentText
+    statusLabel.TextColor3 = t.ON
+    toggleButton.BackgroundColor3 = t.Button
+    closeButton.BackgroundColor3 = t.OFF
+
+    local function restyle(obj)
+        for _, child in ipairs(obj:GetDescendants()) do
+            if child:IsA("UIStroke") then
+                child.Color = t.Stroke
+            elseif child:IsA("TextLabel") then
+                if child == titleText then
+                    child.TextColor3 = t.AccentText
+                elseif child == statusLabel then
+                    child.TextColor3 = t.ON
+                else
+                    child.TextColor3 = t.Text
+                end
+            elseif child:IsA("TextBox") then
+                child.BackgroundColor3 = t.Box
+                child.TextColor3 = t.Text
+                child.PlaceholderColor3 = t.AccentText
+            elseif child:IsA("Frame") then
+                if child ~= frame and child ~= topBar and child ~= sidebar and child ~= body and child ~= content then
+                    if child.BackgroundTransparency < 1 then
+                        child.BackgroundColor3 = t.Card
+                    end
+                end
+            elseif child:IsA("TextButton") then
+                child.TextColor3 = Color3.fromRGB(255, 255, 255)
+                if child ~= closeButton and child ~= toggleButton then
+                    child.BackgroundColor3 = t.Button
+                end
+            end
+        end
+    end
+
+    restyle(frame)
+    restyle(toggleButton)
+
+    updateAutoExecuteButton()
+    updateCompactModeButton()
+    updateMovementButtons()
+    -- Evita erro de escopo: setActiveTab é declarado depois do applyTheme.
+    -- A aba ativa será mantida ou definida no final do script.
+    if themeDropdown and themeDropdown.Button then
+        themeDropdown.Button.Text = "Theme: " .. currentTheme .. " ▼"
+    end
+    setStatus("Theme: " .. currentTheme)
+end
+
+local function getConfigData()
+    return {
+        guiKey = guiToggleKey.Name,
+        farmMode = farmMode,
+        bossDistance = bossHeightBox and bossHeightBox.Text or "30",
+        npcDistance = npcHeightBox and npcHeightBox.Text or "20",
+        dungeonDistance = dungeonHeightBox and dungeonHeightBox.Text or "20",
+        weapon = equipBox and equipBox.Text or "",
+        autoExecute = autoExecuteEnabled,
+        autoExecuteUrl = autoExecuteUrlBox and autoExecuteUrlBox.Text or "",
+        theme = currentTheme,
+        compactMode = compactModeEnabled,
+        framePosition = encodeUDim2(frame.Position),
+        manualNoClip = manualNoClipEnabled,
+        speed = speedValue
+    }
+end
+
+function saveConfig()
+    if writefile then
+        local success, encoded = pcall(function()
+            return HttpService:JSONEncode(getConfigData())
+        end)
+
+        if success then
+            writefile(CONFIG_FILE, encoded)
+            setStatus("Config saved")
+        else
+            setStatus("Config save failed")
+        end
+    else
+        setStatus("writefile not supported")
+    end
+end
+
+local function loadConfig()
+    if not (isfile and readfile and isfile(CONFIG_FILE)) then
+        setStatus("No config file")
+        return
+    end
+
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(readfile(CONFIG_FILE))
+    end)
+
+    if not success or type(data) ~= "table" then
+        setStatus("Config load failed")
+        return
+    end
+
+    if data.guiKey and Enum.KeyCode[data.guiKey] then
+        guiToggleKey = Enum.KeyCode[data.guiKey]
+        keyBox.Text = data.guiKey
+    end
+
+    if data.farmMode then
+        setFarmMode(data.farmMode)
+        farmModeDropdown.Button.Text = "Farm Mode: " .. data.farmMode .. " ▼"
+    end
+
+    if data.bossDistance then
+        bossHeightBox.Text = tostring(data.bossDistance)
+    end
+
+    if data.npcDistance then
+        npcHeightBox.Text = tostring(data.npcDistance)
+    end
+
+    if data.dungeonDistance then
+        dungeonHeightBox.Text = tostring(data.dungeonDistance)
+    end
+
+    if data.weapon then
+        equipBox.Text = tostring(data.weapon)
+    end
+
+    if data.autoExecuteUrl then
+        autoExecuteUrlBox.Text = tostring(data.autoExecuteUrl)
+    end
+
+    autoExecuteEnabled = data.autoExecute == true
+    compactModeEnabled = data.compactMode == true
+    savedFramePosition = decodeUDim2(data.framePosition)
+    if data.speed then
+        local loadedSpeed = tonumber(data.speed)
+        if loadedSpeed then
+            speedValue = math.clamp(loadedSpeed, 16, 200)
+        end
+    end
+
+    manualNoClipEnabled = data.manualNoClip == true
+    applySpeed()
+    setManualNoClip(manualNoClipEnabled)
+
+    updateAutoExecuteButton()
+    updateCompactModeButton()
+    updateMovementButtons()
+    applyGuiLayout(true)
+
+    if data.theme and THEMES[data.theme] then
+        applyTheme(data.theme)
+    else
+        applyTheme(currentTheme)
+    end
+
+    setStatus("Config loaded")
+end
+
 local function setGuiVisible(value)
     frame.Visible = value
     toggleButton.Text = value and "×" or "≡"
@@ -697,19 +1224,23 @@ local function setActiveTab(tab)
     pageNPC.Visible = tab == "npc"
     pagePriority.Visible = tab == "priority"
     pageTeleport.Visible = tab == "teleport"
+    pageDungeons.Visible = tab == "dungeons"
     pageConfig.Visible = tab == "config"
 
-    tabBoss.BackgroundColor3 = tab == "boss" and Color3.fromRGB(45, 100, 200) or Color3.fromRGB(25, 34, 52)
-    tabNPC.BackgroundColor3 = tab == "npc" and Color3.fromRGB(45, 100, 200) or Color3.fromRGB(25, 34, 52)
-    tabPriority.BackgroundColor3 = tab == "priority" and Color3.fromRGB(45, 100, 200) or Color3.fromRGB(25, 34, 52)
-    tabTeleport.BackgroundColor3 = tab == "teleport" and Color3.fromRGB(45, 100, 200) or Color3.fromRGB(25, 34, 52)
-    tabConfig.BackgroundColor3 = tab == "config" and Color3.fromRGB(45, 100, 200) or Color3.fromRGB(25, 34, 52)
+    local t = THEMES[currentTheme] or THEMES["Cyber Blue"]
+    tabBoss.BackgroundColor3 = tab == "boss" and t.Button or t.ButtonDark
+    tabNPC.BackgroundColor3 = tab == "npc" and t.Button or t.ButtonDark
+    tabPriority.BackgroundColor3 = tab == "priority" and t.Button or t.ButtonDark
+    tabTeleport.BackgroundColor3 = tab == "teleport" and t.Button or t.ButtonDark
+    tabDungeons.BackgroundColor3 = tab == "dungeons" and t.Button or t.ButtonDark
+    tabConfig.BackgroundColor3 = tab == "config" and t.Button or t.ButtonDark
 
-    if tab == "boss" then titleText.Text = "Farm Hub - Boss" end
-    if tab == "npc" then titleText.Text = "Farm Hub - NPC" end
-    if tab == "priority" then titleText.Text = "Farm Hub - Priority" end
-    if tab == "teleport" then titleText.Text = "Farm Hub - Teleport" end
-    if tab == "config" then titleText.Text = "Farm Hub - Config" end
+    if tab == "boss" then titleText.Text = "Onyx - Boss" end
+    if tab == "npc" then titleText.Text = "Onyx - NPC" end
+    if tab == "priority" then titleText.Text = "Onyx - Priority" end
+    if tab == "teleport" then titleText.Text = "Onyx - Teleport" end
+    if tab == "dungeons" then titleText.Text = "Onyx - Dungeons" end
+    if tab == "config" then titleText.Text = "Onyx - Config" end
 end
 local function refreshBossList()
     local bosses = getBosses()
@@ -740,21 +1271,22 @@ local function stopAutoFarmBoss()
     autoFarmBossEnabled = false
     bossThread = bossThread + 1
     autoFarmBossButton.Text = "Boss: OFF"
-    autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(180, 115, 36)
+    autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(245, 170, 55)
     if not autoFarmNPCEnabled then clearSmoothHold() end
 end
 local function stopAutoFarmNPC()
     autoFarmNPCEnabled = false
+    currentNPC = nil
     npcThread = npcThread + 1
     autoFarmNPCButton.Text = "NPC: OFF"
-    autoFarmNPCButton.BackgroundColor3 = Color3.fromRGB(180, 115, 36)
+    autoFarmNPCButton.BackgroundColor3 = Color3.fromRGB(245, 170, 55)
     if not autoFarmBossEnabled then clearSmoothHold() end
 end
 local function stopAutoAttack()
     autoAttackEnabled = false
     attackThread = attackThread + 1
     autoAttackButton.Text = "Attack: OFF"
-    autoAttackButton.BackgroundColor3 = Color3.fromRGB(170, 70, 70)
+    autoAttackButton.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
 end
 local function stopAutoEquip()
     autoEquipEnabled = false
@@ -766,13 +1298,22 @@ local function stopPriority()
     priorityEnabled = false
     priorityThread = priorityThread + 1
 end
+
+local function stopAutoDungeon()
+    autoDungeonEnabled = false
+    currentDungeonNPC = nil
+    dungeonThread = dungeonThread + 1
+    autoDungeonButton.Text = "Auto Dungeon: OFF"
+    autoDungeonButton.BackgroundColor3 = Color3.fromRGB(120, 45, 180)
+    clearSmoothHold()
+end
 local function startAutoFarmBoss()
     if autoFarmBossEnabled then return end
     autoFarmBossEnabled = true
     bossThread = bossThread + 1
     local myThread = bossThread
     autoFarmBossButton.Text = "Boss: ON"
-    autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(45, 150, 80)
+    autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
     task.spawn(function()
         while autoFarmBossEnabled and myThread == bossThread do
             if not selectedBoss or not isAlive(selectedBoss) then
@@ -797,24 +1338,36 @@ end
 local function startAutoFarmNPC()
     if autoFarmNPCEnabled then return end
     if not selectedNPCName then selectedNPCName = NPC_NAMES[1] end
+
     autoFarmNPCEnabled = true
     npcThread = npcThread + 1
     local myThread = npcThread
+
     autoFarmNPCButton.Text = "NPC: ON"
-    autoFarmNPCButton.BackgroundColor3 = Color3.fromRGB(45, 150, 80)
+    autoFarmNPCButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
+
     task.spawn(function()
         while autoFarmNPCEnabled and myThread == npcThread do
-            local npc = getClosestNPCByName(selectedNPCName)
-            if npc then
-                local hrp = npc:FindFirstChild("HumanoidRootPart")
+            -- Otimização de FPS: evita varrer workspace:GetDescendants() a cada loop.
+            -- Só procura outro NPC quando o alvo atual morreu, sumiu ou mudou o tipo selecionado.
+            if not currentNPC or not isAlive(currentNPC) or currentNPC.Name ~= selectedNPCName then
+                currentNPC = getClosestNPCByName(selectedNPCName)
+            end
+
+            if currentNPC then
+                local hrp = currentNPC:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
-                    setStatus("Farming NPC: " .. npc.Name)
+                    setStatus("Farming NPC: " .. currentNPC.Name)
+                else
+                    currentNPC = nil
                 end
             else
                 setStatus("Waiting for NPC: " .. tostring(selectedNPCName))
+                task.wait(0.6)
             end
-            task.wait(0.12)
+
+            task.wait(0.18)
         end
     end)
 end
@@ -827,13 +1380,81 @@ pcall(function()
     local net = netPackage and netPackage:FindFirstChild("net")
     actionRemote = net and net:FindFirstChild("RE/ActionRemote")
 end)
+local function startAutoDungeon()
+    if autoDungeonEnabled then return end
+    autoDungeonEnabled = true
+    dungeonThread = dungeonThread + 1
+    local myThread = dungeonThread
+
+    autoDungeonButton.Text = "Auto Dungeon: ON"
+    autoDungeonButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
+
+    task.spawn(function()
+        while autoDungeonEnabled and myThread == dungeonThread do
+            local ok, err = pcall(function()
+                local root = getRootSafe()
+                if not root then
+                    currentDungeonNPC = nil
+                    bodyPosition = nil
+                    bodyGyro = nil
+                    setStatus("Auto Dungeon waiting respawn")
+                    task.wait(0.6)
+                    return
+                end
+
+                if not currentDungeonNPC or not isAlive(currentDungeonNPC) or not DUNGEON_NPC_NAME_SET[currentDungeonNPC.Name] then
+                    currentDungeonNPC = getClosestDungeonNPC()
+                end
+
+                if currentDungeonNPC then
+                    local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
+                        setStatus("Auto Dungeon: " .. currentDungeonNPC.Name)
+                    else
+                        currentDungeonNPC = nil
+                    end
+                else
+                    setStatus("Waiting for dungeon NPC")
+                    task.wait(0.5)
+                end
+
+                if actionRemote then
+                    pcall(function()
+                        actionRemote:FireServer("M1", "Combat")
+                    end)
+                end
+
+                local char = player.Character
+                local tool = char and char:FindFirstChildOfClass("Tool")
+                if tool then
+                    pcall(function()
+                        tool:Activate()
+                    end)
+                end
+            end)
+
+            if not ok then
+                currentDungeonNPC = nil
+                bodyPosition = nil
+                bodyGyro = nil
+                setStatus("Auto Dungeon recovered after error")
+                warn("Auto Dungeon recovered:", err)
+                task.wait(0.7)
+            end
+
+            task.wait(0.12)
+        end
+    end)
+end
+
 local function startAutoAttack()
     if autoAttackEnabled then return end
     autoAttackEnabled = true
     attackThread = attackThread + 1
     local myThread = attackThread
     autoAttackButton.Text = "Attack: ON"
-    autoAttackButton.BackgroundColor3 = Color3.fromRGB(45, 150, 80)
+    autoAttackButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
     task.spawn(function()
         while autoAttackEnabled and myThread == attackThread do
             if actionRemote then
@@ -854,7 +1475,7 @@ local function startAutoEquip()
     equipThread = equipThread + 1
     local myThread = equipThread
     autoEquipButton.Text = "Auto Equip: ON"
-    autoEquipButton.BackgroundColor3 = Color3.fromRGB(45, 150, 80)
+    autoEquipButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
     task.spawn(function()
         while autoEquipEnabled and myThread == equipThread do
             equipTool(equipBox.Text or "")
@@ -867,6 +1488,7 @@ tabBoss.MouseButton1Click:Connect(function() setActiveTab("boss") end)
 tabNPC.MouseButton1Click:Connect(function() setActiveTab("npc") end)
 tabPriority.MouseButton1Click:Connect(function() setActiveTab("priority") end)
 tabTeleport.MouseButton1Click:Connect(function() setActiveTab("teleport") end)
+tabDungeons.MouseButton1Click:Connect(function() setActiveTab("dungeons") end)
 tabConfig.MouseButton1Click:Connect(function() setActiveTab("config") end)
 refreshBossButton.MouseButton1Click:Connect(refreshBossList)
 refreshNPCButton.MouseButton1Click:Connect(refreshNPCList)
@@ -893,6 +1515,9 @@ autoAttackButton.MouseButton1Click:Connect(function()
 end)
 autoEquipButton.MouseButton1Click:Connect(function()
     if autoEquipEnabled then stopAutoEquip() else startAutoEquip() end
+end)
+autoDungeonButton.MouseButton1Click:Connect(function()
+    if autoDungeonEnabled then stopAutoDungeon() else startAutoDungeon() end
 end)
 priorityBossButton.MouseButton1Click:Connect(function()
     priorityBossEnabled = not priorityBossEnabled
@@ -940,6 +1565,79 @@ saveKeyButton.MouseButton1Click:Connect(function()
         setStatus("Invalid key")
     end
 end)
+
+saveConfigButton.MouseButton1Click:Connect(function()
+    saveConfig()
+end)
+
+loadConfigButton.MouseButton1Click:Connect(function()
+    loadConfig()
+end)
+
+autoExecuteButton.MouseButton1Click:Connect(function()
+    autoExecuteEnabled = not autoExecuteEnabled
+    updateAutoExecuteButton()
+    saveConfig()
+end)
+
+autoExecuteUrlBox.FocusLost:Connect(function()
+    if autoExecuteEnabled then
+        saveConfig()
+    end
+end)
+
+compactModeButton.MouseButton1Click:Connect(function()
+    compactModeEnabled = not compactModeEnabled
+    savedFramePosition = nil
+    updateCompactModeButton()
+    applyGuiLayout(false)
+    saveConfig()
+end)
+
+resetUiButton.MouseButton1Click:Connect(function()
+    savedFramePosition = nil
+    compactModeEnabled = false
+    updateCompactModeButton()
+    applyGuiLayout(false)
+    saveConfig()
+    setStatus("UI reset")
+end)
+
+noclipButton.MouseButton1Click:Connect(function()
+    setManualNoClip(not manualNoClipEnabled)
+    saveConfig()
+    setStatus("Noclip: " .. (manualNoClipEnabled and "ON" or "OFF"))
+end)
+
+speedPlusButton.MouseButton1Click:Connect(function()
+    speedValue = math.clamp(speedValue + 5, 16, 200)
+    applySpeed()
+    saveConfig()
+    setStatus("Speed: " .. speedValue)
+end)
+
+speedMinusButton.MouseButton1Click:Connect(function()
+    speedValue = math.clamp(speedValue - 5, 16, 200)
+    applySpeed()
+    saveConfig()
+    setStatus("Speed: " .. speedValue)
+end)
+
+speedResetButton.MouseButton1Click:Connect(function()
+    speedValue = 16
+    applySpeed()
+    saveConfig()
+    setStatus("Speed reset")
+end)
+
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    applySpeed()
+    if manualNoClipEnabled then
+        enableNoClip()
+    end
+end)
+
 local draggingFrame = false
 local frameDragStart = nil
 local frameStartPos = nil
@@ -951,6 +1649,8 @@ topBar.InputBegan:Connect(function(input)
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
                 draggingFrame = false
+                savedFramePosition = frame.Position
+                if saveConfig then saveConfig() end
             end
         end)
     end
@@ -1000,9 +1700,28 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         setGuiVisible(not frame.Visible)
     end
 end)
+player.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Started and autoExecuteEnabled then
+        local rawLink = autoExecuteUrlBox and string.gsub(autoExecuteUrlBox.Text or "", "%s+", "") or ""
+
+        if rawLink ~= "" and queue_on_teleport then
+            queue_on_teleport("loadstring(game:HttpGet(" .. string.format("%q", rawLink) .. "))()")
+            print("Auto Execute queued")
+        else
+            print("Auto Execute enabled, but missing raw link or queue_on_teleport")
+        end
+    end
+end)
+
+buildMobCache()
 setActiveTab("boss")
 refreshBossList()
 refreshNPCList()
 setFarmMode("Above")
+loadConfig()
+applyGuiLayout(true)
+applyTheme(currentTheme)
+applySpeed()
+setManualNoClip(manualNoClipEnabled)
 setGuiVisible(true)
 print("MultiFarmGUI loaded successfully")
