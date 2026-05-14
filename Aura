@@ -90,18 +90,39 @@ local BOSS_NAMES = {
     ["Sukuna"] = true,
     ["Saber"] = true,
     ["Rimuru"] = true,
+    ["Aizen"] = true,
+    ["Raiden Ei"] = true,
 }
 
-local DUNGEON_NPC_NAMES = {
-    "Shadow",
-    "Alpha",
-    "Beta",
-    "Gamma",
-    "Delta",
-    "Epsilon",
-    "Eta",
-    "Zeta",
+local DUNGEON_LIST = {
+    ["Dungeon"] = {
+        "Shadow",
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "Delta",
+        "Epsilon",
+        "Eta",
+        "Zeta",
+    },
+
+    ["Tower"] = {
+        "Tower",
+        "Tower_DualKatana",
+        "Tower_Gryphon",
+        "Tower_Yoru",
+        "Tower_Katana"
+    },
+
+    ["Raiden"] = {
+        "KujouSara",
+        "Samurai",
+        "Raiden"
+    }
 }
+
+local selectedDungeon = "Dungeon"
+local DUNGEON_NPC_NAMES = DUNGEON_LIST[selectedDungeon]
 
 local DUNGEON_NPC_NAME_SET = {}
 for _, dungeonNPCName in ipairs(DUNGEON_NPC_NAMES) do
@@ -123,6 +144,32 @@ local npcCache = {}
 local bossCache = {}
 local dungeonCache = {}
 local cacheReady = false
+
+local function clearTable(t)
+    for key in pairs(t) do
+        t[key] = nil
+    end
+end
+
+local function rebuildDungeonNameSet()
+    clearTable(DUNGEON_NPC_NAME_SET)
+
+    DUNGEON_NPC_NAMES = DUNGEON_LIST[selectedDungeon] or {}
+
+    for _, dungeonNPCName in ipairs(DUNGEON_NPC_NAMES) do
+        DUNGEON_NPC_NAME_SET[dungeonNPCName] = true
+    end
+end
+
+local function refreshDungeonCache()
+    dungeonCache = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and DUNGEON_NPC_NAME_SET[obj.Name] then
+            table.insert(dungeonCache, obj)
+        end
+    end
+end
 
 local function removeFromList(list, item)
     for i = #list, 1, -1 do
@@ -181,6 +228,11 @@ local autoAttackEnabled = false
 local autoEquipEnabled = false
 local priorityEnabled = false
 local autoDungeonEnabled = false
+local autoAizenSummonEnabled = false
+local aizenHollowKills = 0
+local aizenTargetHollow = nil
+local aizenSummonThread = 0
+local aizenTrackedHumanoids = {}
 local currentDungeonNPC = nil
 local bossThread = 0
 local npcThread = 0
@@ -860,6 +912,10 @@ teleportBossButton.Size = UDim2.new(0.5, -3, 1, 0)
 local autoFarmBossButton = makeButton(bossRow, "Boss: OFF", Color3.fromRGB(245, 170, 55))
 autoFarmBossButton.Size = UDim2.new(0.5, -3, 1, 0)
 
+local aizenSummonCard = makeCard(pageBoss, "🌀 Aizen Summon")
+local aizenSummonInfoLabel = makeLabel(aizenSummonCard, "Hollows: 0/50 | Summon: AizenSummonNPC")
+local aizenSummonButton = makeButton(aizenSummonCard, "Farm 50 Hollow + Spawn Aizen: OFF", Color3.fromRGB(120, 70, 180))
+
 local npcTargetCard = makeCard(pageNPC, "🎯 NPC Target")
 local npcSelectedLabel = makeLabel(npcTargetCard, "NPC selected: " .. selectedNPCName)
 local npcDropdown = makeDropdown(npcTargetCard, "Select NPC", NPC_NAMES, selectedNPCName, function(option)
@@ -912,10 +968,28 @@ makeLabel(teleportCard, "Teleport tab ready. We will add buttons later.")
 makeButton(teleportCard, "Coming Soon", Color3.fromRGB(45, 125, 255))
 
 local dungeonsCard = makeCard(pageDungeons, "☠ Dungeons")
-makeLabel(dungeonsCard, "Targets: Shadow, Alpha, Beta, Gamma, Delta, Epsilon, Eta, Zeta")
+
+local dungeonDropdown = makeDropdown(
+    dungeonsCard,
+    "Mode",
+     {"Dungeon", "Tower", "Raiden"},
+    "Dungeon",
+    function(option)
+        selectedDungeon = option
+        rebuildDungeonNameSet()
+
+        currentDungeonNPC = nil
+        refreshDungeonCache()
+
+        setStatus("Dungeon Mode: " .. option)
+    end
+)
+
 makeLabel(dungeonsCard, "Distance / Height")
 local dungeonHeightBox = makeBox(dungeonsCard, "Distance", "20")
 local autoDungeonButton = makeButton(dungeonsCard, "Auto Dungeon: OFF", Color3.fromRGB(120, 45, 180))
+
+local SharedFunctions = {}
 
 local applyTheme
 local saveConfig
@@ -1380,6 +1454,195 @@ pcall(function()
     local net = netPackage and netPackage:FindFirstChild("net")
     actionRemote = net and net:FindFirstChild("RE/ActionRemote")
 end)
+
+local function updateAizenSummonButton()
+    if aizenSummonInfoLabel then
+        aizenSummonInfoLabel.Text = "Hollows: " .. tostring(aizenHollowKills) .. "/50 | Summon: AizenSummonNPC"
+    end
+
+    if aizenSummonButton then
+        aizenSummonButton.Text = "Farm 50 Hollow + Spawn Aizen: " .. (autoAizenSummonEnabled and "ON" or "OFF")
+        aizenSummonButton.BackgroundColor3 = autoAizenSummonEnabled
+            and Color3.fromRGB(40, 220, 140)
+            or Color3.fromRGB(120, 70, 180)
+    end
+end
+
+local function tryActivateAizenSummon()
+    local summon = workspace:FindFirstChild("AizenSummonNPC", true)
+    if not summon then
+        setStatus("AizenSummonNPC not found")
+        return false
+    end
+
+    local root = getRootSafe()
+    local summonPart = nil
+
+    if summon:IsA("BasePart") then
+        summonPart = summon
+    elseif summon:IsA("Model") then
+        summonPart = summon:FindFirstChild("HumanoidRootPart") or summon.PrimaryPart or summon:FindFirstChildWhichIsA("BasePart", true)
+    else
+        summonPart = summon:FindFirstAncestorWhichIsA("BasePart")
+    end
+
+    if summonPart and root then
+        clearSmoothHold()
+        root.CFrame = summonPart.CFrame + Vector3.new(0, 4, 0)
+        task.wait(0.25)
+    end
+
+    local activated = false
+
+    for _, obj in ipairs(summon:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            pcall(function()
+                fireproximityprompt(obj)
+                activated = true
+            end)
+        elseif obj:IsA("ClickDetector") then
+            pcall(function()
+                fireclickdetector(obj)
+                activated = true
+            end)
+        end
+    end
+
+    -- Caso o prompt esteja no pai do modelo/parte.
+    local parent = summon.Parent
+    if parent then
+        for _, obj in ipairs(parent:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") and tostring(obj.Parent):find("Aizen") then
+                pcall(function()
+                    fireproximityprompt(obj)
+                    activated = true
+                end)
+            elseif obj:IsA("ClickDetector") and tostring(obj.Parent):find("Aizen") then
+                pcall(function()
+                    fireclickdetector(obj)
+                    activated = true
+                end)
+            end
+        end
+    end
+
+    if activated then
+        setStatus("Aizen summon activated")
+    else
+        setStatus("Go near AizenSummonNPC / no prompt found")
+    end
+
+    return activated
+end
+
+local function trackAizenHollowDeath(hollow)
+    if not hollow then return end
+    local hum = hollow:FindFirstChildOfClass("Humanoid")
+    if not hum or aizenTrackedHumanoids[hum] then return end
+
+    aizenTrackedHumanoids[hum] = true
+    hum.Died:Connect(function()
+        if autoAizenSummonEnabled then
+            aizenHollowKills = math.clamp(aizenHollowKills + 1, 0, 50)
+            updateAizenSummonButton()
+            setStatus("Aizen Hollows: " .. tostring(aizenHollowKills) .. "/50")
+        end
+    end)
+end
+
+local function stopAizenSummonFarm()
+    autoAizenSummonEnabled = false
+    aizenTargetHollow = nil
+    aizenSummonThread = aizenSummonThread + 1
+    updateAizenSummonButton()
+    clearSmoothHold()
+end
+
+local function startAizenSummonFarm()
+    if autoAizenSummonEnabled then return end
+
+    autoAizenSummonEnabled = true
+    aizenHollowKills = 0
+    aizenTargetHollow = nil
+    aizenTrackedHumanoids = {}
+    aizenSummonThread = aizenSummonThread + 1
+    local myThread = aizenSummonThread
+
+    stopAutoFarmBoss()
+    stopAutoFarmNPC()
+    updateAizenSummonButton()
+
+    task.spawn(function()
+        while autoAizenSummonEnabled and myThread == aizenSummonThread do
+            local ok, err = pcall(function()
+                local root = getRootSafe()
+                if not root then
+                    setStatus("Aizen farm waiting respawn")
+                    task.wait(0.6)
+                    return
+                end
+
+                if aizenHollowKills >= 50 then
+                    setStatus("50 Hollows done, spawning Aizen")
+                    tryActivateAizenSummon()
+                    task.wait(1)
+                    selectedBoss = getClosestBoss()
+                    if selectedBoss then
+                        startAutoFarmBoss()
+                    end
+                    stopAizenSummonFarm()
+                    return
+                end
+
+                if not aizenTargetHollow or not isAlive(aizenTargetHollow) or aizenTargetHollow.Name ~= "Hollow" then
+                    aizenTargetHollow = getClosestNPCByName("Hollow")
+                    if aizenTargetHollow then
+                        trackAizenHollowDeath(aizenTargetHollow)
+                    end
+                end
+
+                if aizenTargetHollow then
+                    local hrp = aizenTargetHollow:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
+                        setStatus("Aizen farm Hollow: " .. tostring(aizenHollowKills) .. "/50")
+                    else
+                        aizenTargetHollow = nil
+                    end
+                else
+                    setStatus("Waiting for Hollow")
+                    task.wait(0.5)
+                end
+
+                if actionRemote then
+                    pcall(function()
+                        actionRemote:FireServer("M1", "Combat")
+                    end)
+                end
+
+                local char = player.Character
+                local tool = char and char:FindFirstChildOfClass("Tool")
+                if tool then
+                    pcall(function()
+                        tool:Activate()
+                    end)
+                end
+            end)
+
+            if not ok then
+                aizenTargetHollow = nil
+                setStatus("Aizen farm recovered after error")
+                warn("Aizen farm recovered:", err)
+                task.wait(0.7)
+            end
+
+            task.wait(0.12)
+        end
+    end)
+end
+
+updateAizenSummonButton()
+
 local function startAutoDungeon()
     if autoDungeonEnabled then return end
     autoDungeonEnabled = true
@@ -1406,17 +1669,55 @@ local function startAutoDungeon()
                     currentDungeonNPC = getClosestDungeonNPC()
                 end
 
-                if currentDungeonNPC then
-                    local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
-                        setStatus("Auto Dungeon: " .. currentDungeonNPC.Name)
+                if selectedDungeon == "Tower" then
+                    local boss = getClosestBoss()
+
+                    if boss and isAlive(boss) then
+                        local bossRoot = boss:FindFirstChild("HumanoidRootPart")
+
+                        if bossRoot then
+                            smoothMoveTo(getFarmCFrame(bossRoot, getHeight(dungeonHeightBox, 20)))
+                            setStatus("Tower Boss: " .. boss.Name)
+                        end
+                    elseif currentDungeonNPC then
+                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+
+                        if hrp then
+                            smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
+                            setStatus("Tower NPC: " .. currentDungeonNPC.Name)
+                        else
+                            currentDungeonNPC = nil
+                        end
                     else
-                        currentDungeonNPC = nil
+                        setStatus("Waiting for Tower enemies")
+                        task.wait(0.5)
                     end
                 else
-                    setStatus("Waiting for dungeon NPC")
-                    task.wait(0.5)
+                    if currentDungeonNPC then
+                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+
+                        if hrp then
+                            smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
+                            setStatus("Auto Dungeon: " .. currentDungeonNPC.Name)
+                        else
+                            currentDungeonNPC = nil
+                        end
+                    else
+                        refreshDungeonCache()
+                        currentDungeonNPC = getClosestDungeonNPC()
+
+                        if currentDungeonNPC then
+                            local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+
+                            if hrp then
+                                smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
+                                setStatus("Auto Dungeon: " .. currentDungeonNPC.Name)
+                            end
+                        else
+                            setStatus("Waiting for dungeon NPC")
+                            task.wait(0.5)
+                        end
+                    end
                 end
 
                 if actionRemote then
@@ -1506,6 +1807,14 @@ teleportBossButton.MouseButton1Click:Connect(function()
 end)
 autoFarmBossButton.MouseButton1Click:Connect(function()
     if autoFarmBossEnabled then stopAutoFarmBoss() else startAutoFarmBoss() end
+end)
+aizenSummonButton.MouseButton1Click:Connect(function()
+    if autoAizenSummonEnabled then
+        stopAizenSummonFarm()
+        setStatus("Aizen summon farm stopped")
+    else
+        startAizenSummonFarm()
+    end
 end)
 autoFarmNPCButton.MouseButton1Click:Connect(function()
     if autoFarmNPCEnabled then stopAutoFarmNPC() else startAutoFarmNPC() end
@@ -1638,68 +1947,77 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
-local draggingFrame = false
-local frameDragStart = nil
-local frameStartPos = nil
-topBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingFrame = true
-        frameDragStart = input.Position
-        frameStartPos = frame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
-                draggingFrame = false
-                savedFramePosition = frame.Position
-                if saveConfig then saveConfig() end
-            end
-        end)
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if draggingFrame and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - frameDragStart
-        frame.Position = UDim2.new(frameStartPos.X.Scale, frameStartPos.X.Offset + delta.X, frameStartPos.Y.Scale, frameStartPos.Y.Offset + delta.Y)
-    end
-end)
-local draggingToggle = false
-local toggleDragStart = nil
-local toggleStartPos = nil
-local toggleMoved = false
-toggleButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingToggle = true
-        toggleMoved = false
-        toggleDragStart = input.Position
-        toggleStartPos = toggleButton.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
-                draggingToggle = false
-            end
-        end)
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if draggingToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - toggleDragStart
-        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
-            toggleMoved = true
+
+
+local function setupDragControls()
+    local draggingFrame = false
+    local frameDragStart = nil
+    local frameStartPos = nil
+    topBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            draggingFrame = true
+            frameDragStart = input.Position
+            frameStartPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+                    draggingFrame = false
+                    savedFramePosition = frame.Position
+                    if saveConfig then saveConfig() end
+                end
+            end)
         end
-        toggleButton.Position = UDim2.new(toggleStartPos.X.Scale, toggleStartPos.X.Offset + delta.X, toggleStartPos.Y.Scale, toggleStartPos.Y.Offset + delta.Y)
-    end
-end)
-toggleButton.MouseButton1Click:Connect(function()
-    if toggleMoved then
-        toggleMoved = false
-        return
-    end
-    setGuiVisible(not frame.Visible)
-end)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == guiToggleKey then
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if draggingFrame and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - frameDragStart
+            frame.Position = UDim2.new(frameStartPos.X.Scale, frameStartPos.X.Offset + delta.X, frameStartPos.Y.Scale, frameStartPos.Y.Offset + delta.Y)
+        end
+    end)
+    local draggingToggle = false
+    local toggleDragStart = nil
+    local toggleStartPos = nil
+    local toggleMoved = false
+    toggleButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            draggingToggle = true
+            toggleMoved = false
+            toggleDragStart = input.Position
+            toggleStartPos = toggleButton.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+                    draggingToggle = false
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if draggingToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - toggleDragStart
+            if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
+                toggleMoved = true
+            end
+            toggleButton.Position = UDim2.new(toggleStartPos.X.Scale, toggleStartPos.X.Offset + delta.X, toggleStartPos.Y.Scale, toggleStartPos.Y.Offset + delta.Y)
+        end
+    end)
+    toggleButton.MouseButton1Click:Connect(function()
+        if toggleMoved then
+            toggleMoved = false
+            return
+        end
         setGuiVisible(not frame.Visible)
-    end
-end)
+    end)
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == guiToggleKey then
+            setGuiVisible(not frame.Visible)
+        end
+    end)
+end
+
+
+
+setupDragControls()
+
 player.OnTeleport:Connect(function(state)
     if state == Enum.TeleportState.Started and autoExecuteEnabled then
         local rawLink = autoExecuteUrlBox and string.gsub(autoExecuteUrlBox.Text or "", "%s+", "") or ""
@@ -1714,6 +2032,7 @@ player.OnTeleport:Connect(function(state)
 end)
 
 buildMobCache()
+refreshDungeonCache()
 setActiveTab("boss")
 refreshBossList()
 refreshNPCList()
