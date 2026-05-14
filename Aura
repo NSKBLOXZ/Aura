@@ -233,6 +233,7 @@ aizenHollowKills = 0
 aizenTargetHollow = nil
 aizenSummonThread = 0
 aizenTrackedHumanoids = {}
+aizenCountedHollows = {}
 currentDungeonNPC = nil
 bossThread = 0
 npcThread = 0
@@ -479,6 +480,56 @@ function getClosestBoss()
     end
 
     return best
+end
+
+-- Usado pelo ciclo do Aizen para não travar farmando outros bosses como Sung Jinwoo.
+function getClosestBossByNameSet(nameSet)
+    buildMobCache()
+
+    local root = getRootSafe()
+    if not root then return nil end
+
+    local best = nil
+    local bestDist = math.huge
+
+    local function checkModel(model)
+        if model and model:IsA("Model") and nameSet[model.Name] and isAlive(model) then
+            local hrp = model:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = model
+                end
+            end
+        end
+    end
+
+    for i = #bossCache, 1, -1 do
+        local boss = bossCache[i]
+        if boss and boss.Parent then
+            checkModel(boss)
+        else
+            table.remove(bossCache, i)
+        end
+    end
+
+    -- Fallback para quando o boss nasce depois e ainda não entrou no cache.
+    if not best then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            checkModel(obj)
+        end
+    end
+
+    return best
+end
+
+function getClosestAizenBoss()
+    return getClosestBossByNameSet({
+        ["Aizen"] = true,
+        ["Aizen Boss"] = true,
+        ["AizenBoss"] = true,
+    })
 end
 
 function getClosestNPCByName(name)
@@ -1483,45 +1534,59 @@ function tryActivateAizenSummon()
     elseif summon:IsA("Model") then
         summonPart = summon:FindFirstChild("HumanoidRootPart") or summon.PrimaryPart or summon:FindFirstChildWhichIsA("BasePart", true)
     else
-        summonPart = summon:FindFirstAncestorWhichIsA("BasePart")
+        summonPart = summon:FindFirstAncestorWhichIsA("BasePart") or summon:FindFirstChildWhichIsA("BasePart", true)
     end
 
     if summonPart and root then
         clearSmoothHold()
         root.CFrame = summonPart.CFrame + Vector3.new(0, 4, 0)
-        task.wait(0.25)
+        task.wait(0.45)
     end
 
     local activated = false
 
-    for _, obj in ipairs(summon:GetDescendants()) do
+    local function activateObject(obj)
         if obj:IsA("ProximityPrompt") then
             pcall(function()
-                fireproximityprompt(obj)
-                activated = true
+                if fireproximityprompt then
+                    obj.HoldDuration = 0
+                    fireproximityprompt(obj)
+                    activated = true
+                end
             end)
         elseif obj:IsA("ClickDetector") then
             pcall(function()
-                fireclickdetector(obj)
-                activated = true
+                if fireclickdetector then
+                    fireclickdetector(obj)
+                    activated = true
+                end
+            end)
+        elseif obj:IsA("TouchTransmitter") then
+            pcall(function()
+                local part = obj.Parent
+                if part and part:IsA("BasePart") and root then
+                    firetouchinterest(root, part, 0)
+                    task.wait(0.1)
+                    firetouchinterest(root, part, 1)
+                    activated = true
+                end
             end)
         end
     end
 
-    -- Caso o prompt esteja no pai do modelo/parte.
+    -- Ativa prompts/clicks dentro do AizenSummonNPC.
+    activateObject(summon)
+    for _, obj in ipairs(summon:GetDescendants()) do
+        activateObject(obj)
+    end
+
+    -- Alguns jogos deixam o Prompt no pai ou na parte próxima do NPC.
     local parent = summon.Parent
     if parent then
         for _, obj in ipairs(parent:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and tostring(obj.Parent):find("Aizen") then
-                pcall(function()
-                    fireproximityprompt(obj)
-                    activated = true
-                end)
-            elseif obj:IsA("ClickDetector") and tostring(obj.Parent):find("Aizen") then
-                pcall(function()
-                    fireclickdetector(obj)
-                    activated = true
-                end)
+            local n = string.lower(obj.Name .. " " .. tostring(obj.Parent and obj.Parent.Name or ""))
+            if string.find(n, "aizen") or string.find(n, "summon") then
+                activateObject(obj)
             end
         end
     end
@@ -1529,10 +1594,18 @@ function tryActivateAizenSummon()
     if activated then
         setStatus("Aizen summon activated")
     else
-        setStatus("Go near AizenSummonNPC / no prompt found")
+        setStatus("No prompt/click found on AizenSummonNPC")
     end
 
     return activated
+end
+
+function countAizenHollowKill(hollow)
+    if not hollow or aizenCountedHollows[hollow] then return end
+    aizenCountedHollows[hollow] = true
+    aizenHollowKills = math.clamp(aizenHollowKills + 1, 0, 50)
+    updateAizenSummonButton()
+    setStatus("Aizen Hollows: " .. tostring(aizenHollowKills) .. "/50")
 end
 
 function trackAizenHollowDeath(hollow)
@@ -1543,9 +1616,7 @@ function trackAizenHollowDeath(hollow)
     aizenTrackedHumanoids[hum] = true
     hum.Died:Connect(function()
         if autoAizenSummonEnabled then
-            aizenHollowKills = math.clamp(aizenHollowKills + 1, 0, 50)
-            updateAizenSummonButton()
-            setStatus("Aizen Hollows: " .. tostring(aizenHollowKills) .. "/50")
+            countAizenHollowKill(hollow)
         end
     end)
 end
@@ -1565,6 +1636,7 @@ function startAizenSummonFarm()
     aizenHollowKills = 0
     aizenTargetHollow = nil
     aizenTrackedHumanoids = {}
+    aizenCountedHollows = {}
     aizenSummonThread = aizenSummonThread + 1
     local myThread = aizenSummonThread
 
@@ -1585,7 +1657,7 @@ function startAizenSummonFarm()
                 -- Se já tiver boss vivo, mantém o Auto Farm Boss ligado junto.
                 local livingBoss = selectedBoss
                 if not livingBoss or not isAlive(livingBoss) then
-                    livingBoss = getClosestBoss()
+                    livingBoss = getClosestAizenBoss()
                     selectedBoss = livingBoss
                 end
 
@@ -1609,7 +1681,7 @@ function startAizenSummonFarm()
                     local summoned = tryActivateAizenSummon()
                     task.wait(summoned and 2 or 1)
 
-                    selectedBoss = getClosestBoss()
+                    selectedBoss = getClosestAizenBoss()
                     if selectedBoss and isAlive(selectedBoss) then
                         startAutoFarmBoss()
                         setStatus("Aizen spawned, Auto Boss ON")
@@ -1621,13 +1693,19 @@ function startAizenSummonFarm()
                     aizenHollowKills = 0
                     aizenTargetHollow = nil
                     aizenTrackedHumanoids = {}
+                    aizenCountedHollows = {}
                     updateAizenSummonButton()
                     task.wait(0.8)
                     return
                 end
 
                 -- Farm dos Hollows até 50.
-                if not aizenTargetHollow or not isAlive(aizenTargetHollow) or aizenTargetHollow.Name ~= "Hollow" then
+                if aizenTargetHollow and not isAlive(aizenTargetHollow) then
+                    countAizenHollowKill(aizenTargetHollow)
+                    aizenTargetHollow = nil
+                end
+
+                if not aizenTargetHollow or aizenTargetHollow.Name ~= "Hollow" then
                     aizenTargetHollow = getClosestNPCByName("Hollow")
                     if aizenTargetHollow then
                         trackAizenHollowDeath(aizenTargetHollow)
