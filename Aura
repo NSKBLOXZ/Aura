@@ -914,7 +914,7 @@ autoFarmBossButton.Size = UDim2.new(0.5, -3, 1, 0)
 
 local aizenSummonCard = makeCard(pageBoss, "🌀 Aizen Summon")
 local aizenSummonInfoLabel = makeLabel(aizenSummonCard, "Hollows: 0/50 | Summon: AizenSummonNPC")
-local aizenSummonButton = makeButton(aizenSummonCard, "Farm 50 Hollow + Spawn Aizen: OFF", Color3.fromRGB(120, 70, 180))
+local aizenSummonButton = makeButton(aizenSummonCard, "Auto Aizen Cycle: OFF", Color3.fromRGB(120, 70, 180))
 
 local npcTargetCard = makeCard(pageNPC, "🎯 NPC Target")
 local npcSelectedLabel = makeLabel(npcTargetCard, "NPC selected: " .. selectedNPCName)
@@ -1461,7 +1461,7 @@ local function updateAizenSummonButton()
     end
 
     if aizenSummonButton then
-        aizenSummonButton.Text = "Farm 50 Hollow + Spawn Aizen: " .. (autoAizenSummonEnabled and "ON" or "OFF")
+        aizenSummonButton.Text = "Auto Aizen Cycle: " .. (autoAizenSummonEnabled and "ON" or "OFF")
         aizenSummonButton.BackgroundColor3 = autoAizenSummonEnabled
             and Color3.fromRGB(40, 220, 140)
             or Color3.fromRGB(120, 70, 180)
@@ -1568,7 +1568,7 @@ local function startAizenSummonFarm()
     aizenSummonThread = aizenSummonThread + 1
     local myThread = aizenSummonThread
 
-    stopAutoFarmBoss()
+    -- Deixa o ciclo controlar o farm: Hollow -> Summon -> Boss -> repetir.
     stopAutoFarmNPC()
     updateAizenSummonButton()
 
@@ -1577,23 +1577,56 @@ local function startAizenSummonFarm()
             local ok, err = pcall(function()
                 local root = getRootSafe()
                 if not root then
-                    setStatus("Aizen farm waiting respawn")
+                    setStatus("Aizen cycle waiting respawn")
                     task.wait(0.6)
                     return
                 end
 
-                if aizenHollowKills >= 50 then
-                    setStatus("50 Hollows done, spawning Aizen")
-                    tryActivateAizenSummon()
-                    task.wait(1)
-                    selectedBoss = getClosestBoss()
-                    if selectedBoss then
+                -- Se já tiver boss vivo, mantém o Auto Farm Boss ligado junto.
+                local livingBoss = selectedBoss
+                if not livingBoss or not isAlive(livingBoss) then
+                    livingBoss = getClosestBoss()
+                    selectedBoss = livingBoss
+                end
+
+                if livingBoss and isAlive(livingBoss) then
+                    if not autoFarmBossEnabled then
                         startAutoFarmBoss()
                     end
-                    stopAizenSummonFarm()
+                    setStatus("Auto Aizen: farming boss " .. livingBoss.Name)
+                    task.wait(0.5)
                     return
                 end
 
+                -- Se não tem boss vivo e o Auto Boss ficou ligado, desliga para voltar aos Hollows.
+                if autoFarmBossEnabled then
+                    stopAutoFarmBoss()
+                end
+
+                -- Ao chegar em 50 Hollows, usa o AizenSummonNPC e liga o Auto Farm Boss.
+                if aizenHollowKills >= 50 then
+                    setStatus("50 Hollows done, spawning Aizen")
+                    local summoned = tryActivateAizenSummon()
+                    task.wait(summoned and 2 or 1)
+
+                    selectedBoss = getClosestBoss()
+                    if selectedBoss and isAlive(selectedBoss) then
+                        startAutoFarmBoss()
+                        setStatus("Aizen spawned, Auto Boss ON")
+                    else
+                        setStatus("Aizen spawned/waiting for boss")
+                    end
+
+                    -- Zera para o próximo ciclo, mas NÃO desliga o botão.
+                    aizenHollowKills = 0
+                    aizenTargetHollow = nil
+                    aizenTrackedHumanoids = {}
+                    updateAizenSummonButton()
+                    task.wait(0.8)
+                    return
+                end
+
+                -- Farm dos Hollows até 50.
                 if not aizenTargetHollow or not isAlive(aizenTargetHollow) or aizenTargetHollow.Name ~= "Hollow" then
                     aizenTargetHollow = getClosestNPCByName("Hollow")
                     if aizenTargetHollow then
@@ -1605,7 +1638,7 @@ local function startAizenSummonFarm()
                     local hrp = aizenTargetHollow:FindFirstChild("HumanoidRootPart")
                     if hrp then
                         smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
-                        setStatus("Aizen farm Hollow: " .. tostring(aizenHollowKills) .. "/50")
+                        setStatus("Aizen cycle Hollow: " .. tostring(aizenHollowKills) .. "/50")
                     else
                         aizenTargetHollow = nil
                     end
@@ -1631,8 +1664,8 @@ local function startAizenSummonFarm()
 
             if not ok then
                 aizenTargetHollow = nil
-                setStatus("Aizen farm recovered after error")
-                warn("Aizen farm recovered:", err)
+                setStatus("Aizen cycle recovered after error")
+                warn("Aizen cycle recovered:", err)
                 task.wait(0.7)
             end
 
