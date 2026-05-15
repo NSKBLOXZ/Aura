@@ -1457,7 +1457,6 @@ function stopPriority()
         startPriorityButton.BackgroundColor3 = Color3.fromRGB(45, 135, 92)
     end
 end
-end
 
 function stopAutoDungeon()
     autoDungeonEnabled = false
