@@ -281,12 +281,39 @@ function getRootSafe()
     return nil
 end
 
+
+function getMobHumanoid(model)
+    if not model then
+        return nil
+    end
+
+    return model:FindFirstChildOfClass("Humanoid")
+        or model:FindFirstChildWhichIsA("Humanoid", true)
+end
+
+function getMobRoot(model)
+    if not model then
+        return nil
+    end
+
+    if model:IsA("BasePart") then
+        return model
+    end
+
+    return model:FindFirstChild("HumanoidRootPart")
+        or model:FindFirstChild("HumanoidRootPart", true)
+        or model.PrimaryPart
+        or model:FindFirstChildWhichIsA("BasePart", true)
+end
+
 function isAlive(model)
     if not model or not model.Parent then
         return false
     end
-    local hum = model:FindFirstChildOfClass("Humanoid")
-    local root = model:FindFirstChild("HumanoidRootPart")
+
+    local hum = getMobHumanoid(model)
+    local root = getMobRoot(model)
+
     return hum ~= nil and root ~= nil and hum.Health > 0
 end
 
@@ -569,28 +596,43 @@ function getClosestNPCByName(name)
 
     buildMobCache()
 
-    local root = getRoot()
-    local list = npcCache[name]
+    local root = getRootSafe() or getRoot()
     local best = nil
     local bestDist = math.huge
 
-    if not list then
-        return nil
+    -- Primeiro tenta o cache normal
+    local list = npcCache[name]
+    if list then
+        for i = #list, 1, -1 do
+            local obj = list[i]
+            if isAlive(obj) and obj.Name == name then
+                local hrp = getMobRoot(obj)
+                if hrp then
+                    local dist = (hrp.Position - root.Position).Magnitude
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = obj
+                    end
+                end
+            else
+                table.remove(list, i)
+            end
+        end
     end
 
-    for i = #list, 1, -1 do
-        local obj = list[i]
-        if isAlive(obj) and obj.Name == name then
-            local hrp = obj:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local dist = (hrp.Position - root.Position).Magnitude
-                if dist < bestDist then
-                    bestDist = dist
-                    best = obj
+    -- Fallback: procura direto no workspace para NPCs em Model dentro de Model, como Ichigo (Bankai).
+    if not best then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj.Name == name and isAlive(obj) then
+                local hrp = getMobRoot(obj)
+                if hrp then
+                    local dist = (hrp.Position - root.Position).Magnitude
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = obj
+                    end
                 end
             end
-        else
-            table.remove(list, i)
         end
     end
 
@@ -1486,7 +1528,7 @@ function startAutoFarmBoss()
                 bossDropdown.Button.Text = "Select Boss: " .. selectedBoss.Name .. " ▼"
                 bossSelectedLabel.Text = "Boss selected: " .. selectedBoss.Name
             end
-            local hrp = selectedBoss:FindFirstChild("HumanoidRootPart")
+            local hrp = getMobRoot(selectedBoss)
             if hrp then
                 smoothMoveTo(getFarmCFrame(hrp, getHeight(bossHeightBox, 30)))
                 setStatus("Farming boss: " .. selectedBoss.Name)
@@ -1515,7 +1557,7 @@ function startAutoFarmNPC()
             end
 
             if currentNPC then
-                local hrp = currentNPC:FindFirstChild("HumanoidRootPart")
+                local hrp = getMobRoot(currentNPC)
                 if hrp then
                     smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
                     setStatus("Farming NPC: " .. currentNPC.Name)
@@ -1721,7 +1763,7 @@ function startAizenSummonFarm()
                 end
 
                 if aizenTargetHollow then
-                    local hrp = aizenTargetHollow:FindFirstChild("HumanoidRootPart")
+                    local hrp = getMobRoot(aizenTargetHollow)
                     if hrp then
                         smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
                         setStatus("Aizen cycle Hollow: " .. tostring(aizenHollowKills) .. "/50")
@@ -1792,14 +1834,14 @@ function startAutoDungeon()
                     local boss = getClosestBoss()
 
                     if boss and isAlive(boss) then
-                        local bossRoot = boss:FindFirstChild("HumanoidRootPart")
+                        local bossRoot = getMobRoot(boss)
 
                         if bossRoot then
                             smoothMoveTo(getFarmCFrame(bossRoot, getHeight(dungeonHeightBox, 20)))
                             setStatus("Tower Boss: " .. boss.Name)
                         end
                     elseif currentDungeonNPC then
-                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+                        local hrp = getMobRoot(currentDungeonNPC)
 
                         if hrp then
                             smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -1813,7 +1855,7 @@ function startAutoDungeon()
                     end
                 else
                     if currentDungeonNPC then
-                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+                        local hrp = getMobRoot(currentDungeonNPC)
 
                         if hrp then
                             smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -1826,7 +1868,7 @@ function startAutoDungeon()
                         currentDungeonNPC = getClosestDungeonNPC()
 
                         if currentDungeonNPC then
-                            local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
+                            local hrp = getMobRoot(currentDungeonNPC)
 
                             if hrp then
                                 smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -1917,7 +1959,7 @@ teleportBossButton.MouseButton1Click:Connect(function()
         setStatus("No boss selected")
         return
     end
-    local hrp = selectedBoss:FindFirstChild("HumanoidRootPart")
+    local hrp = getMobRoot(selectedBoss)
     if hrp then
         clearSmoothHold()
         getRoot().CFrame = hrp.CFrame + Vector3.new(0, 10, 0)
