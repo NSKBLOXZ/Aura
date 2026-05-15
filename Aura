@@ -293,11 +293,6 @@ end
 end
 
 
-function getRealMobModel(model)
-    if not model or not model.Parent then
-        return nil
-    end
-
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum then
         return model
@@ -311,21 +306,9 @@ function getRealMobModel(model)
     return model
 end
 
-function getMobHumanoid(model)
-    local realModel = getRealMobModel(model)
-    if not realModel then
-        return nil
-    end
-
     return realModel:FindFirstChildOfClass("Humanoid")
         or realModel:FindFirstChildWhichIsA("Humanoid", true)
 end
-
-function getMobRoot(model)
-    local realModel = getRealMobModel(model)
-    if not realModel then
-        return nil
-    end
 
     if realModel:IsA("BasePart") then
         return realModel
@@ -338,12 +321,6 @@ function getMobRoot(model)
         or realModel:FindFirstChild("UpperTorso")
         or realModel:FindFirstChildWhichIsA("BasePart", true)
 end
-
-function getNPCByExactNameDeep(name)
-    local root = getRootSafe() or getRoot()
-    if not root then
-        return nil
-    end
 
     local best = nil
     local bestDist = math.huge
@@ -367,14 +344,96 @@ function getNPCByExactNameDeep(name)
     return best
 end
 
+
+function getAnyHumanoidFrom(obj)
+    if not obj then return nil end
+    if obj:IsA("Humanoid") then return obj end
+    return obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildWhichIsA("Humanoid", true)
+end
+
+function getAnyRootFrom(obj)
+    if not obj then return nil end
+    if obj:IsA("BasePart") then return obj end
+    return obj:FindFirstChild("HumanoidRootPart", true)
+        or obj:FindFirstChild("Torso", true)
+        or obj:FindFirstChild("UpperTorso", true)
+        or obj.PrimaryPart
+        or obj:FindFirstChildWhichIsA("BasePart", true)
+end
+
+function getRealNPCModelFrom(obj)
+    if not obj then return nil end
+    local hum = getAnyHumanoidFrom(obj)
+    if hum and hum.Parent and hum.Parent:IsA("Model") then
+        return hum.Parent
+    end
+    if obj:IsA("Model") then
+        return obj
+    end
+    return obj:FindFirstAncestorWhichIsA("Model")
+end
+
+function isIchigoName(name)
+    name = tostring(name or ""):lower()
+    return string.find(name, "ichigo", 1, true) ~= nil
+end
+
+function findClosestNPCByNameDeep(name)
+    local root = getRootSafe() or getRoot()
+    if not root then return nil end
+
+    local best = nil
+    local bestDist = math.huge
+    local wanted = tostring(name or ""):lower()
+    local usePartialIchigo = string.find(wanted, "ichigo", 1, true) ~= nil
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local nameOk = false
+
+        if obj.Name == name then
+            nameOk = true
+        elseif usePartialIchigo and isIchigoName(obj.Name) then
+            nameOk = true
+        end
+
+        if nameOk then
+            local model = getRealNPCModelFrom(obj)
+            local hum = getAnyHumanoidFrom(model)
+            local hrp = getAnyRootFrom(model)
+
+            if model and hum and hrp and hum.Health > 0 then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = model
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+
+function getMobHumanoid(model)
+    return getAnyHumanoidFrom(model)
+end
+
+function getMobRoot(model)
+    return getAnyRootFrom(model)
+end
+
+function getRealMobModel(model)
+    return getRealNPCModelFrom(model)
+end
+
 function isAlive(model)
     if not model or not model.Parent then
         return false
     end
 
-    local realModel = getRealMobModel(model)
-    local hum = getMobHumanoid(realModel)
-    local root = getMobRoot(realModel)
+    local hum = getAnyHumanoidFrom(model)
+    local root = getAnyRootFrom(model)
 
     return hum ~= nil and root ~= nil and hum.Health > 0
 end
@@ -656,35 +715,36 @@ function getClosestNPCByName(name)
         return nil
     end
 
+    -- Busca profunda primeiro. Resolve Ichigo (Bankai) dentro de model/folder.
+    local deep = findClosestNPCByNameDeep(name)
+    if deep then
+        return deep
+    end
+
     buildMobCache()
 
     local root = getRootSafe() or getRoot()
+    local list = npcCache[name]
     local best = nil
     local bestDist = math.huge
 
-    -- Primeiro procura direto no workspace. Isso resolve NPC com Model dentro de Model, tipo Ichigo (Bankai).
-    best = getNPCByExactNameDeep(name)
-    if best then
-        return best
+    if not list then
+        return nil
     end
 
-    -- Fallback pelo cache antigo.
-    local list = npcCache[name]
-    if list then
-        for i = #list, 1, -1 do
-            local obj = list[i]
-            if isAlive(obj) and obj.Name == name then
-                local hrp = getMobRoot(obj)
-                if hrp then
-                    local dist = (hrp.Position - root.Position).Magnitude
-                    if dist < bestDist then
-                        bestDist = dist
-                        best = getRealMobModel(obj)
-                    end
+    for i = #list, 1, -1 do
+        local obj = list[i]
+        if isAlive(obj) and obj.Name == name then
+            local hrp = getAnyRootFrom(obj)
+            if hrp then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = getRealNPCModelFrom(obj)
                 end
-            else
-                table.remove(list, i)
             end
+        else
+            table.remove(list, i)
         end
     end
 
