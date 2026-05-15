@@ -82,6 +82,7 @@ local NPC_NAMES = {
     "Shank",
     "Snow Bandit",
     "Sorcerer Student"
+"Ichigo (Bankai)",
 }
 local BOSS_NAMES = {
     ["Verdant Hero"] = true,
