@@ -281,160 +281,12 @@ function getRootSafe()
     return nil
 end
 
-
-    if model:IsA("BasePart") then
-        return model
-    end
-
-    return model:FindFirstChild("HumanoidRootPart")
-        or model:FindFirstChild("HumanoidRootPart", true)
-        or model.PrimaryPart
-        or model:FindFirstChildWhichIsA("BasePart", true)
-end
-
-
-    local hum = model:FindFirstChildOfClass("Humanoid")
-    if hum then
-        return model
-    end
-
-    hum = model:FindFirstChildWhichIsA("Humanoid", true)
-    if hum then
-        return hum.Parent
-    end
-
-    return model
-end
-
-    return realModel:FindFirstChildOfClass("Humanoid")
-        or realModel:FindFirstChildWhichIsA("Humanoid", true)
-end
-
-    if realModel:IsA("BasePart") then
-        return realModel
-    end
-
-    return realModel:FindFirstChild("HumanoidRootPart")
-        or realModel:FindFirstChild("HumanoidRootPart", true)
-        or realModel.PrimaryPart
-        or realModel:FindFirstChild("Torso")
-        or realModel:FindFirstChild("UpperTorso")
-        or realModel:FindFirstChildWhichIsA("BasePart", true)
-end
-
-    local best = nil
-    local bestDist = math.huge
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name == name then
-            local realModel = getRealMobModel(obj)
-            local hum = getMobHumanoid(realModel)
-            local hrp = getMobRoot(realModel)
-
-            if hum and hrp and hum.Health > 0 then
-                local dist = (hrp.Position - root.Position).Magnitude
-                if dist < bestDist then
-                    bestDist = dist
-                    best = realModel
-                end
-            end
-        end
-    end
-
-    return best
-end
-
-
-function getAnyHumanoidFrom(obj)
-    if not obj then return nil end
-    if obj:IsA("Humanoid") then return obj end
-    return obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildWhichIsA("Humanoid", true)
-end
-
-function getAnyRootFrom(obj)
-    if not obj then return nil end
-    if obj:IsA("BasePart") then return obj end
-    return obj:FindFirstChild("HumanoidRootPart", true)
-        or obj:FindFirstChild("Torso", true)
-        or obj:FindFirstChild("UpperTorso", true)
-        or obj.PrimaryPart
-        or obj:FindFirstChildWhichIsA("BasePart", true)
-end
-
-function getRealNPCModelFrom(obj)
-    if not obj then return nil end
-    local hum = getAnyHumanoidFrom(obj)
-    if hum and hum.Parent and hum.Parent:IsA("Model") then
-        return hum.Parent
-    end
-    if obj:IsA("Model") then
-        return obj
-    end
-    return obj:FindFirstAncestorWhichIsA("Model")
-end
-
-function isIchigoName(name)
-    name = tostring(name or ""):lower()
-    return string.find(name, "ichigo", 1, true) ~= nil
-end
-
-function findClosestNPCByNameDeep(name)
-    local root = getRootSafe() or getRoot()
-    if not root then return nil end
-
-    local best = nil
-    local bestDist = math.huge
-    local wanted = tostring(name or ""):lower()
-    local usePartialIchigo = string.find(wanted, "ichigo", 1, true) ~= nil
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        local nameOk = false
-
-        if obj.Name == name then
-            nameOk = true
-        elseif usePartialIchigo and isIchigoName(obj.Name) then
-            nameOk = true
-        end
-
-        if nameOk then
-            local model = getRealNPCModelFrom(obj)
-            local hum = getAnyHumanoidFrom(model)
-            local hrp = getAnyRootFrom(model)
-
-            if model and hum and hrp and hum.Health > 0 then
-                local dist = (hrp.Position - root.Position).Magnitude
-                if dist < bestDist then
-                    bestDist = dist
-                    best = model
-                end
-            end
-        end
-    end
-
-    return best
-end
-
-
-function getMobHumanoid(model)
-    return getAnyHumanoidFrom(model)
-end
-
-function getMobRoot(model)
-    return getAnyRootFrom(model)
-end
-
-function getRealMobModel(model)
-    return getRealNPCModelFrom(model)
-end
-
 function isAlive(model)
     if not model or not model.Parent then
         return false
     end
-
-    local hum = getAnyHumanoidFrom(model)
-    local root = getAnyRootFrom(model)
-
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    local root = model:FindFirstChild("HumanoidRootPart")
     return hum ~= nil and root ~= nil and hum.Health > 0
 end
 
@@ -694,7 +546,7 @@ function getClosestBoss()
     for i = #bossCache, 1, -1 do
         local boss = bossCache[i]
         if isAlive(boss) then
-            local hrp = getMobRoot(boss)
+            local hrp = boss:FindFirstChild("HumanoidRootPart")
             if hrp then
                 local dist = (hrp.Position - root.Position).Magnitude
                 if dist < bestDist then
@@ -710,20 +562,64 @@ function getClosestBoss()
     return best
 end
 
+
+function findHumanoidDeep(model)
+    if not model then return nil end
+    return model:FindFirstChildOfClass("Humanoid") or model:FindFirstChildWhichIsA("Humanoid", true)
+end
+
+function findRootDeep(model)
+    if not model then return nil end
+    if model:IsA("BasePart") then return model end
+
+    return model:FindFirstChild("HumanoidRootPart", true)
+        or model:FindFirstChild("UpperTorso", true)
+        or model:FindFirstChild("Torso", true)
+        or model.PrimaryPart
+        or model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+function getClosestIchigoBankai()
+    local root = getRootSafe() or getRoot()
+    if not root then return nil end
+
+    local best = nil
+    local bestDist = math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and string.find(string.lower(obj.Name), "ichigo", 1, true) then
+            local hum = findHumanoidDeep(obj)
+            local hrp = findRootDeep(obj)
+
+            if hum and hrp and hum.Health > 0 then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = obj
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+
 function getClosestNPCByName(name)
     if not name or name == "" then
         return nil
     end
 
-    -- Busca profunda primeiro. Resolve Ichigo (Bankai) dentro de model/folder.
-    local deep = findClosestNPCByNameDeep(name)
-    if deep then
-        return deep
+    if string.find(string.lower(tostring(name)), "ichigo", 1, true) then
+        local ichigo = getClosestIchigoBankai()
+        if ichigo then
+            return ichigo
+        end
     end
 
     buildMobCache()
 
-    local root = getRootSafe() or getRoot()
+    local root = getRoot()
     local list = npcCache[name]
     local best = nil
     local bestDist = math.huge
@@ -735,12 +631,12 @@ function getClosestNPCByName(name)
     for i = #list, 1, -1 do
         local obj = list[i]
         if isAlive(obj) and obj.Name == name then
-            local hrp = getAnyRootFrom(obj)
+            local hrp = obj:FindFirstChild("HumanoidRootPart")
             if hrp then
                 local dist = (hrp.Position - root.Position).Magnitude
                 if dist < bestDist then
                     bestDist = dist
-                    best = getRealNPCModelFrom(obj)
+                    best = obj
                 end
             end
         else
@@ -1640,7 +1536,7 @@ function startAutoFarmBoss()
                 bossDropdown.Button.Text = "Select Boss: " .. selectedBoss.Name .. " ▼"
                 bossSelectedLabel.Text = "Boss selected: " .. selectedBoss.Name
             end
-            local hrp = getMobRoot(selectedBoss)
+            local hrp = selectedBoss:FindFirstChild("HumanoidRootPart")
             if hrp then
                 smoothMoveTo(getFarmCFrame(hrp, getHeight(bossHeightBox, 30)))
                 setStatus("Farming boss: " .. selectedBoss.Name)
@@ -1669,7 +1565,7 @@ function startAutoFarmNPC()
             end
 
             if currentNPC then
-                local hrp = getMobRoot(currentNPC)
+                local hrp = (string.find(string.lower(tostring(currentNPC.Name)), "ichigo", 1, true) and findRootDeep(currentNPC)) or currentNPC:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
                     setStatus("Farming NPC: " .. currentNPC.Name)
@@ -1875,7 +1771,7 @@ function startAizenSummonFarm()
                 end
 
                 if aizenTargetHollow then
-                    local hrp = getMobRoot(aizenTargetHollow)
+                    local hrp = aizenTargetHollow:FindFirstChild("HumanoidRootPart")
                     if hrp then
                         smoothMoveTo(getFarmCFrame(hrp, getHeight(npcHeightBox, 20)))
                         setStatus("Aizen cycle Hollow: " .. tostring(aizenHollowKills) .. "/50")
@@ -1946,14 +1842,14 @@ function startAutoDungeon()
                     local boss = getClosestBoss()
 
                     if boss and isAlive(boss) then
-                        local bossRoot = getMobRoot(boss)
+                        local bossRoot = boss:FindFirstChild("HumanoidRootPart")
 
                         if bossRoot then
                             smoothMoveTo(getFarmCFrame(bossRoot, getHeight(dungeonHeightBox, 20)))
                             setStatus("Tower Boss: " .. boss.Name)
                         end
                     elseif currentDungeonNPC then
-                        local hrp = getMobRoot(currentDungeonNPC)
+                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
 
                         if hrp then
                             smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -1967,7 +1863,7 @@ function startAutoDungeon()
                     end
                 else
                     if currentDungeonNPC then
-                        local hrp = getMobRoot(currentDungeonNPC)
+                        local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
 
                         if hrp then
                             smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -1980,7 +1876,7 @@ function startAutoDungeon()
                         currentDungeonNPC = getClosestDungeonNPC()
 
                         if currentDungeonNPC then
-                            local hrp = getMobRoot(currentDungeonNPC)
+                            local hrp = currentDungeonNPC:FindFirstChild("HumanoidRootPart")
 
                             if hrp then
                                 smoothMoveTo(getFarmCFrame(hrp, getHeight(dungeonHeightBox, 20)))
@@ -2071,7 +1967,7 @@ teleportBossButton.MouseButton1Click:Connect(function()
         setStatus("No boss selected")
         return
     end
-    local hrp = getMobRoot(selectedBoss)
+    local hrp = selectedBoss:FindFirstChild("HumanoidRootPart")
     if hrp then
         clearSmoothHold()
         getRoot().CFrame = hrp.CFrame + Vector3.new(0, 10, 0)
