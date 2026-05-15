@@ -282,20 +282,6 @@ function getRootSafe()
 end
 
 
-function getMobHumanoid(model)
-    if not model then
-        return nil
-    end
-
-    return model:FindFirstChildOfClass("Humanoid")
-        or model:FindFirstChildWhichIsA("Humanoid", true)
-end
-
-function getMobRoot(model)
-    if not model then
-        return nil
-    end
-
     if model:IsA("BasePart") then
         return model
     end
@@ -306,13 +292,89 @@ function getMobRoot(model)
         or model:FindFirstChildWhichIsA("BasePart", true)
 end
 
+
+function getRealMobModel(model)
+    if not model or not model.Parent then
+        return nil
+    end
+
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if hum then
+        return model
+    end
+
+    hum = model:FindFirstChildWhichIsA("Humanoid", true)
+    if hum then
+        return hum.Parent
+    end
+
+    return model
+end
+
+function getMobHumanoid(model)
+    local realModel = getRealMobModel(model)
+    if not realModel then
+        return nil
+    end
+
+    return realModel:FindFirstChildOfClass("Humanoid")
+        or realModel:FindFirstChildWhichIsA("Humanoid", true)
+end
+
+function getMobRoot(model)
+    local realModel = getRealMobModel(model)
+    if not realModel then
+        return nil
+    end
+
+    if realModel:IsA("BasePart") then
+        return realModel
+    end
+
+    return realModel:FindFirstChild("HumanoidRootPart")
+        or realModel:FindFirstChild("HumanoidRootPart", true)
+        or realModel.PrimaryPart
+        or realModel:FindFirstChild("Torso")
+        or realModel:FindFirstChild("UpperTorso")
+        or realModel:FindFirstChildWhichIsA("BasePart", true)
+end
+
+function getNPCByExactNameDeep(name)
+    local root = getRootSafe() or getRoot()
+    if not root then
+        return nil
+    end
+
+    local best = nil
+    local bestDist = math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name == name then
+            local realModel = getRealMobModel(obj)
+            local hum = getMobHumanoid(realModel)
+            local hrp = getMobRoot(realModel)
+
+            if hum and hrp and hum.Health > 0 then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = realModel
+                end
+            end
+        end
+    end
+
+    return best
+end
+
 function isAlive(model)
     if not model or not model.Parent then
         return false
     end
 
-    local hum = getMobHumanoid(model)
-    local root = getMobRoot(model)
+    local realModel = getRealMobModel(model)
+    local hum = getMobHumanoid(realModel)
+    local root = getMobRoot(realModel)
 
     return hum ~= nil and root ~= nil and hum.Health > 0
 end
@@ -573,7 +635,7 @@ function getClosestBoss()
     for i = #bossCache, 1, -1 do
         local boss = bossCache[i]
         if isAlive(boss) then
-            local hrp = boss:FindFirstChild("HumanoidRootPart")
+            local hrp = getMobRoot(boss)
             if hrp then
                 local dist = (hrp.Position - root.Position).Magnitude
                 if dist < bestDist then
@@ -600,7 +662,13 @@ function getClosestNPCByName(name)
     local best = nil
     local bestDist = math.huge
 
-    -- Primeiro tenta o cache normal
+    -- Primeiro procura direto no workspace. Isso resolve NPC com Model dentro de Model, tipo Ichigo (Bankai).
+    best = getNPCByExactNameDeep(name)
+    if best then
+        return best
+    end
+
+    -- Fallback pelo cache antigo.
     local list = npcCache[name]
     if list then
         for i = #list, 1, -1 do
@@ -611,27 +679,11 @@ function getClosestNPCByName(name)
                     local dist = (hrp.Position - root.Position).Magnitude
                     if dist < bestDist then
                         bestDist = dist
-                        best = obj
+                        best = getRealMobModel(obj)
                     end
                 end
             else
                 table.remove(list, i)
-            end
-        end
-    end
-
-    -- Fallback: procura direto no workspace para NPCs em Model dentro de Model, como Ichigo (Bankai).
-    if not best then
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name == name and isAlive(obj) then
-                local hrp = getMobRoot(obj)
-                if hrp then
-                    local dist = (hrp.Position - root.Position).Magnitude
-                    if dist < bestDist then
-                        bestDist = dist
-                        best = obj
-                    end
-                end
             end
         end
     end
