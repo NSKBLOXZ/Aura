@@ -16,20 +16,20 @@ local speedValue = 16
 
 local THEMES = {
     ["Cyber Blue"] = {
-        Main = Color3.fromRGB(8, 18, 32),
-        Top = Color3.fromRGB(14, 34, 58),
-        Sidebar = Color3.fromRGB(12, 28, 48),
-        Card = Color3.fromRGB(18, 38, 62),
-        Box = Color3.fromRGB(14, 30, 52),
-        Button = Color3.fromRGB(45, 125, 255),
-        ButtonDark = Color3.fromRGB(20, 48, 82),
+        Main = Color3.fromRGB(5, 10, 20),
+        Top = Color3.fromRGB(8, 18, 34),
+        Sidebar = Color3.fromRGB(7, 15, 28),
+        Card = Color3.fromRGB(11, 24, 42),
+        Box = Color3.fromRGB(8, 20, 38),
+        Button = Color3.fromRGB(40, 220, 140),
+        ButtonDark = Color3.fromRGB(13, 30, 55),
         Text = Color3.fromRGB(240, 248, 255),
         AccentText = Color3.fromRGB(170, 220, 255),
-        Stroke = Color3.fromRGB(110, 180, 255),
+        Stroke = Color3.fromRGB(60, 255, 170),
         ON = Color3.fromRGB(40, 220, 140),
         OFF = Color3.fromRGB(220, 80, 80),
         Warn = Color3.fromRGB(245, 170, 55),
-        Purple = Color3.fromRGB(120, 70, 180),
+        Purple = Color3.fromRGB(30, 200, 130),
     },
     ["Shadow Dark"] = {
         Main = Color3.fromRGB(10, 10, 16),
@@ -699,6 +699,18 @@ function padding(obj, left, right, top, bottom)
     return p
 end
 
+
+function addGradient(obj, color1, color2)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color1 or Color3.fromRGB(40, 220, 140)),
+        ColorSequenceKeypoint.new(1, color2 or Color3.fromRGB(30, 200, 130))
+    })
+    g.Rotation = 25
+    g.Parent = obj
+    return g
+end
+
 function makeLabel(parent, text, size, color)
     local label = Instance.new("TextLabel")
     label.BackgroundTransparency = 1
@@ -717,7 +729,7 @@ end
 function makeButton(parent, text, color, height)
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(1, 0, 0, height or (isMobile and 34 or 38))
-    button.BackgroundColor3 = color or Color3.fromRGB(45, 125, 255)
+    button.BackgroundColor3 = color or Color3.fromRGB(40, 220, 140)
     button.Text = text
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.Font = Enum.Font.GothamBold
@@ -726,8 +738,11 @@ function makeButton(parent, text, color, height)
     button.AutoButtonColor = true
     button.ZIndex = 20
     button.Parent = parent
-    corner(button, 9)
-    stroke(button, Color3.fromRGB(110, 180, 255), 0.68)
+    corner(button, 10)
+    stroke(button, Color3.fromRGB(60, 255, 170), 0.62)
+    if color == nil or color == Color3.fromRGB(40, 220, 140) or color == Color3.fromRGB(40, 220, 140) then
+        addGradient(button, Color3.fromRGB(40, 220, 140), Color3.fromRGB(20, 180, 120))
+    end
     return button
 end
 
@@ -754,7 +769,8 @@ end
 function makeCard(parent, title)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, 0, 0, 80)
-    card.BackgroundColor3 = Color3.fromRGB(18, 38, 62)
+    card.BackgroundColor3 = Color3.fromRGB(11, 24, 42)
+    card.BackgroundTransparency = 0.03
     card.BorderSizePixel = 0
     card.ZIndex = 15
     card.Parent = parent
@@ -783,7 +799,7 @@ function makeDropdown(parent, title, options, defaultValue, callback)
     container.ClipsDescendants = false
     container.Parent = parent
 
-    local main = makeButton(container, title .. ": " .. tostring(defaultValue or "None") .. " ▼", Color3.fromRGB(45, 125, 255))
+    local main = makeButton(container, title .. ": " .. tostring(defaultValue or "None") .. " ▼", Color3.fromRGB(40, 220, 140))
     main.Size = UDim2.new(1, 0, 0, isMobile and 34 or 38)
     main.ZIndex = 40
 
@@ -875,7 +891,7 @@ screenGui.Parent = playerGui
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = isMobile and UDim2.new(0, 58, 0, 58) or UDim2.new(0, 46, 0, 46)
 toggleButton.Position = isMobile and UDim2.new(0, 14, 0.5, -29) or UDim2.new(0, 18, 0.5, -23)
-toggleButton.BackgroundColor3 = Color3.fromRGB(45, 125, 255)
+toggleButton.BackgroundColor3 = Color3.fromRGB(40, 220, 140)
 toggleButton.Text = "≡"
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.GothamBold
@@ -887,8 +903,8 @@ corner(toggleButton, 15)
 stroke(toggleButton, Color3.fromRGB(180, 215, 255), 0.3)
 
 local frame = Instance.new("Frame")
-frame.Size = isMobile and UDim2.new(0.90, 0, 0.72, 0) or UDim2.new(0, 620, 0, 455)
-frame.Position = isMobile and UDim2.new(0.05, 0, 0.14, 0) or UDim2.new(0.5, -310, 0.5, -227)
+frame.Size = isMobile and UDim2.new(0.90, 0, 0.72, 0) or UDim2.new(0, 690, 0, 485)
+frame.Position = isMobile and UDim2.new(0.05, 0, 0.14, 0) or UDim2.new(0.5, -345, 0.5, -242)
 local defaultFrameSize = frame.Size
 local defaultFramePosition = frame.Position
 local compactFrameSize = isMobile and UDim2.new(0.78, 0, 0.58, 0) or UDim2.new(0, 500, 0, 380)
@@ -907,8 +923,9 @@ topBar.BackgroundColor3 = Color3.fromRGB(14, 34, 58)
 topBar.BorderSizePixel = 0
 topBar.ZIndex = 11
 topBar.Parent = frame
+addGradient(topBar, Color3.fromRGB(8, 18, 34), Color3.fromRGB(18, 36, 72))
 
-local titleText = makeLabel(topBar, "Onyx", isMobile and 17 or 20, Color3.fromRGB(170, 220, 255))
+local titleText = makeLabel(topBar, "ONYX V3 EMERALD ✦", isMobile and 17 or 20, Color3.fromRGB(170, 220, 255))
 titleText.Size = UDim2.new(1, -60, 1, 0)
 titleText.Position = UDim2.new(0, 14, 0, 0)
 
@@ -952,10 +969,10 @@ function sideTab(text, order)
 end
 
 local tabBoss = sideTab("⚔ Boss", 1)
-local tabNPC = sideTab("♟ NPC", 2)
-local tabPriority = sideTab("★ Prio", 3)
-local tabTeleport = sideTab("◇ TP", 4)
-local tabDungeons = sideTab("☠ Dungeons", 5)
+local tabNPC = sideTab("◇ NPC", 2)
+local tabPriority = sideTab("★ Priority", 3)
+local tabTeleport = sideTab("◆ Teleport", 4)
+local tabDungeons = sideTab("☠ Dungeon", 5)
 local tabConfig = sideTab("⚙ Config", 6)
 
 local content = Instance.new("Frame")
@@ -1025,7 +1042,7 @@ local bossDropdown = makeDropdown(bossTargetCard, "Select Boss", {"None"}, "None
         end
     end
 end)
-local refreshBossButton = makeButton(bossTargetCard, "Refresh Bosses", Color3.fromRGB(45, 125, 255))
+local refreshBossButton = makeButton(bossTargetCard, "Refresh Bosses", Color3.fromRGB(40, 220, 140))
 
 local bossFarmCard = makeCard(pageBoss, "🔥 Boss Farm")
 makeLabel(bossFarmCard, "Distance / Height")
@@ -1038,7 +1055,7 @@ local bossRowLayout = Instance.new("UIListLayout")
 bossRowLayout.FillDirection = Enum.FillDirection.Horizontal
 bossRowLayout.Padding = UDim.new(0, 6)
 bossRowLayout.Parent = bossRow
-local teleportBossButton = makeButton(bossRow, "TP Boss", Color3.fromRGB(45, 125, 255))
+local teleportBossButton = makeButton(bossRow, "TP Boss", Color3.fromRGB(40, 220, 140))
 teleportBossButton.Size = UDim2.new(0.5, -3, 1, 0)
 local autoFarmBossButton = makeButton(bossRow, "Boss: OFF", Color3.fromRGB(245, 170, 55))
 autoFarmBossButton.Size = UDim2.new(0.5, -3, 1, 0)
@@ -1055,7 +1072,7 @@ local npcDropdown = makeDropdown(npcTargetCard, "Select NPC", NPC_NAMES, selecte
     npcSelectedLabel.Text = "NPC selected: " .. option
     setStatus("NPC selected: " .. option)
 end)
-local refreshNPCButton = makeButton(npcTargetCard, "Refresh NPCs", Color3.fromRGB(45, 125, 255))
+local refreshNPCButton = makeButton(npcTargetCard, "Refresh NPCs", Color3.fromRGB(40, 220, 140))
 
 local npcFarmCard = makeCard(pageNPC, "⚔ NPC Farm")
 makeLabel(npcFarmCard, "Distance / Height")
@@ -1096,7 +1113,7 @@ stopPriorityButton.Size = UDim2.new(0.5, -3, 1, 0)
 
 local teleportCard = makeCard(pageTeleport, "◇ Teleport")
 makeLabel(teleportCard, "Teleport tab ready. We will add buttons later.")
-makeButton(teleportCard, "Coming Soon", Color3.fromRGB(45, 125, 255))
+makeButton(teleportCard, "Coming Soon", Color3.fromRGB(40, 220, 140))
 
 local dungeonsCard = makeCard(pageDungeons, "☠ Dungeons")
 
@@ -1127,6 +1144,11 @@ local saveConfig
 local updateMovementButtons
 local applySpeed
 local setManualNoClip
+
+local visualInfoCard = makeCard(pageConfig, "✨ Onyx V3 Visual")
+makeLabel(visualInfoCard, "Premium dark/glass style")
+makeLabel(visualInfoCard, "Ichigo fix: QuestNPCIchigo auto removed")
+
 local configCard = makeCard(pageConfig, "⚙ Config")
 local keyBox = makeBox(configCard, "RightControl", "RightControl")
 local saveKeyButton = makeButton(configCard, "Save Key", Color3.fromRGB(70, 105, 175))
@@ -1176,7 +1198,7 @@ speedMinusButton.Size = UDim2.new(0.33, -4, 1, 0)
 local speedPlusButton = makeButton(speedRow, "+ Speed", Color3.fromRGB(40, 220, 140))
 speedPlusButton.Size = UDim2.new(0.33, -4, 1, 0)
 
-local speedResetButton = makeButton(speedRow, "Reset", Color3.fromRGB(45, 125, 255))
+local speedResetButton = makeButton(speedRow, "Reset", Color3.fromRGB(40, 220, 140))
 speedResetButton.Size = UDim2.new(0.34, -4, 1, 0)
 
 local autoExecuteUrlBox = makeBox(configCard, "Raw script link for auto execute", "")
@@ -1440,12 +1462,12 @@ function setActiveTab(tab)
     tabDungeons.BackgroundColor3 = tab == "dungeons" and t.Button or t.ButtonDark
     tabConfig.BackgroundColor3 = tab == "config" and t.Button or t.ButtonDark
 
-    if tab == "boss" then titleText.Text = "Onyx - Boss" end
-    if tab == "npc" then titleText.Text = "Onyx - NPC" end
-    if tab == "priority" then titleText.Text = "Onyx - Priority" end
-    if tab == "teleport" then titleText.Text = "Onyx - Teleport" end
-    if tab == "dungeons" then titleText.Text = "Onyx - Dungeons" end
-    if tab == "config" then titleText.Text = "Onyx - Config" end
+    if tab == "boss" then titleText.Text = "ONYX V3 EMERALD ✦ Boss" end
+    if tab == "npc" then titleText.Text = "ONYX V3 EMERALD ✦ NPC" end
+    if tab == "priority" then titleText.Text = "ONYX V3 EMERALD ✦ Priority" end
+    if tab == "teleport" then titleText.Text = "ONYX V3 EMERALD ✦ Teleport" end
+    if tab == "dungeons" then titleText.Text = "ONYX V3 EMERALD ✦ Dungeons" end
+    if tab == "config" then titleText.Text = "ONYX V3 EMERALD ✦ Config" end
 end
 function refreshBossList()
     local bosses = getBosses()
@@ -1545,6 +1567,23 @@ function startAutoFarmBoss()
         end
     end)
 end
+
+function removeQuestNPCIchigo()
+    local questNpc = workspace:FindFirstChild("QuestNPCIchigo", true)
+
+    if questNpc then
+        pcall(function()
+            questNpc:Destroy()
+        end)
+    end
+end
+
+function prepareIchigoFarm()
+    if selectedNPCName == "Ichigo (Bankai)" then
+        removeQuestNPCIchigo()
+    end
+end
+
 function startAutoFarmNPC()
     if autoFarmNPCEnabled then return end
     if not selectedNPCName then selectedNPCName = NPC_NAMES[1] end
@@ -1558,6 +1597,7 @@ function startAutoFarmNPC()
 
     task.spawn(function()
         while autoFarmNPCEnabled and myThread == npcThread do
+            prepareIchigoFarm()
             -- Otimização de FPS: evita varrer workspace:GetDescendants() a cada loop.
             -- Só procura outro NPC quando o alvo atual morreu, sumiu ou mudou o tipo selecionado.
             if not currentNPC or not isAlive(currentNPC) or currentNPC.Name ~= selectedNPCName then
@@ -2272,3 +2312,790 @@ applySpeed()
 setManualNoClip(manualNoClipEnabled)
 setGuiVisible(true)
 print("MultiFarmGUI loaded successfully")
+
+
+--========================================================
+-- ONYX V5 LIGHT CONNECTED GUI
+-- Corrige erro: "Out of local registers"
+-- Poucos locals, GUI conectada nas funções originais.
+--========================================================
+
+pcall(function()
+    if screenGui then
+        screenGui.Enabled = false
+    end
+end)
+
+do
+    local GNAME = "OnyxV5FinalClean"
+    local old = playerGui:FindFirstChild(GNAME)
+    if old then old:Destroy() end
+
+    local T = {
+        bg = Color3.fromRGB(3, 7, 8),
+        p1 = Color3.fromRGB(7, 18, 17),
+        p2 = Color3.fromRGB(9, 26, 23),
+        card = Color3.fromRGB(8, 24, 22),
+        card2 = Color3.fromRGB(12, 34, 29),
+        green = Color3.fromRGB(28, 220, 135),
+        green2 = Color3.fromRGB(15, 130, 88),
+        stroke = Color3.fromRGB(35, 210, 135),
+        soft = Color3.fromRGB(20, 120, 85),
+        text = Color3.fromRGB(235, 248, 242),
+        muted = Color3.fromRGB(135, 170, 155),
+        red = Color3.fromRGB(220, 75, 80),
+        off = Color3.fromRGB(37, 48, 48)
+    }
+
+    local function cr(o, r)
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, r or 12)
+        c.Parent = o
+        return c
+    end
+
+    local function st(o, col, tr)
+        local s = Instance.new("UIStroke")
+        s.Color = col or T.stroke
+        s.Transparency = tr or 0.55
+        s.Thickness = 1
+        s.Parent = o
+        return s
+    end
+
+    local function gr(o, a, b)
+        local g = Instance.new("UIGradient")
+        g.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, a),
+            ColorSequenceKeypoint.new(1, b)
+        })
+        g.Rotation = 25
+        g.Parent = o
+        return g
+    end
+
+    local function stat(x)
+        if setStatus then
+            pcall(function()
+                setStatus(tostring(x))
+            end)
+        end
+        if _G.OnyxV5Status then
+            _G.OnyxV5Status.Text = "✓ " .. tostring(x)
+        end
+    end
+
+    local function safe(fn, ...)
+        local ok, err = pcall(fn, ...)
+        if not ok then
+            warn("[ONYX ERROR]", err)
+            stat("Erro: " .. tostring(err))
+        end
+        return ok
+    end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = GNAME
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999999
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = playerGui
+
+    local main = Instance.new("Frame")
+    main.Size = isMobile and UDim2.new(0.94, 0, 0.78, 0) or UDim2.new(0, 900, 0, 560)
+    main.Position = isMobile and UDim2.new(0.03, 0, 0.11, 0) or UDim2.new(0.5, -450, 0.5, -280)
+    main.BackgroundColor3 = T.bg
+    main.BorderSizePixel = 0
+    main.Parent = gui
+    cr(main, 20)
+    st(main, T.stroke, 0.25)
+    gr(main, T.bg, Color3.fromRGB(5, 14, 13))
+
+    local side = Instance.new("Frame")
+    side.Size = isMobile and UDim2.new(0, 92, 1, -20) or UDim2.new(0, 185, 1, -20)
+    side.Position = UDim2.new(0, 10, 0, 10)
+    side.BackgroundColor3 = T.p1
+    side.BorderSizePixel = 0
+    side.Parent = main
+    cr(side, 16)
+    st(side, T.soft, 0.55)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 50)
+    title.Position = UDim2.new(0, 14, 0, 18)
+    title.BackgroundTransparency = 1
+    title.Text = isMobile and "ONYX" or "ONYX V5"
+    title.TextColor3 = T.text
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = isMobile and 18 or 30
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = side
+
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(1, -20, 0, 22)
+    sub.Position = UDim2.new(0, 16, 0, 60)
+    sub.BackgroundTransparency = 1
+    sub.Text = isMobile and "V5" or "CONNECTED"
+    sub.TextColor3 = T.green
+    sub.Font = Enum.Font.GothamBold
+    sub.TextSize = isMobile and 10 or 13
+    sub.TextXAlignment = Enum.TextXAlignment.Left
+    sub.Parent = side
+
+    local nav = Instance.new("Frame")
+    nav.Size = UDim2.new(1, -20, 0, 390)
+    nav.Position = UDim2.new(0, 10, 0, 105)
+    nav.BackgroundTransparency = 1
+    nav.Parent = side
+
+    local navLay = Instance.new("UIListLayout")
+    navLay.Padding = UDim.new(0, 9)
+    navLay.Parent = nav
+
+    local content = Instance.new("Frame")
+    content.Size = isMobile and UDim2.new(1, -120, 1, -64) or UDim2.new(1, -220, 1, -64)
+    content.Position = isMobile and UDim2.new(0, 106, 0, 10) or UDim2.new(0, 205, 0, 10)
+    content.BackgroundTransparency = 1
+    content.Parent = main
+
+    local top = Instance.new("Frame")
+    top.Size = UDim2.new(1, 0, 0, 75)
+    top.BackgroundColor3 = T.p1
+    top.BorderSizePixel = 0
+    top.Parent = content
+    cr(top, 16)
+    st(top, T.soft, 0.55)
+
+    local h = Instance.new("TextLabel")
+    h.Size = UDim2.new(1, -120, 0, 34)
+    h.Position = UDim2.new(0, 18, 0, 10)
+    h.BackgroundTransparency = 1
+    h.Text = "ONYX V5 FINAL CLEAN"
+    h.TextColor3 = T.text
+    h.Font = Enum.Font.GothamBlack
+    h.TextSize = isMobile and 16 or 23
+    h.TextXAlignment = Enum.TextXAlignment.Left
+    h.Parent = top
+
+    local hs = Instance.new("TextLabel")
+    hs.Size = UDim2.new(1, -120, 0, 22)
+    hs.Position = UDim2.new(0, 20, 0, 43)
+    hs.BackgroundTransparency = 1
+    hs.Text = "Dashboard limpa, funções nas abas corretas"
+    hs.TextColor3 = T.green
+    hs.Font = Enum.Font.GothamBold
+    hs.TextSize = 12
+    hs.TextXAlignment = Enum.TextXAlignment.Left
+    hs.Parent = top
+
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 36, 0, 34)
+    close.Position = UDim2.new(1, -46, 0, 12)
+    close.BackgroundColor3 = T.red
+    close.Text = "×"
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Font = Enum.Font.GothamBlack
+    close.TextSize = 22
+    close.BorderSizePixel = 0
+    close.Parent = main
+    cr(close, 10)
+
+    local body = Instance.new("Frame")
+    body.Size = UDim2.new(1, 0, 1, -88)
+    body.Position = UDim2.new(0, 0, 0, 88)
+    body.BackgroundTransparency = 1
+    body.Parent = content
+
+    local pages = {}
+    local tabs = {}
+
+    local function page(n)
+        local p = Instance.new("ScrollingFrame")
+        p.Size = UDim2.new(1, 0, 1, -36)
+        p.BackgroundTransparency = 1
+        p.BorderSizePixel = 0
+        p.ScrollBarThickness = 4
+        p.Visible = false
+        p.Parent = body
+        local l = Instance.new("UIListLayout")
+        l.Padding = UDim.new(0, 10)
+        l.Parent = p
+        l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            p.CanvasSize = UDim2.new(0,0,0,l.AbsoluteContentSize.Y + 14)
+        end)
+        pages[n] = p
+        return p
+    end
+
+    local function card(p, name, height)
+        local c = Instance.new("Frame")
+        c.Size = UDim2.new(1, -8, 0, height or 140)
+        c.BackgroundColor3 = T.card
+        c.BorderSizePixel = 0
+        c.Parent = p
+        cr(c, 14)
+        st(c, T.soft, 0.5)
+        gr(c, T.card, T.card2)
+
+        local t = Instance.new("TextLabel")
+        t.Size = UDim2.new(1, -24, 0, 32)
+        t.Position = UDim2.new(0, 14, 0, 8)
+        t.BackgroundTransparency = 1
+        t.Text = name
+        t.TextColor3 = T.text
+        t.Font = Enum.Font.GothamBlack
+        t.TextSize = 15
+        t.TextXAlignment = Enum.TextXAlignment.Left
+        t.Parent = c
+
+        return c
+    end
+
+    local function btn(par, txt, pos, size, col)
+        local b = Instance.new("TextButton")
+        b.Size = size or UDim2.new(0, 150, 0, 38)
+        b.Position = pos or UDim2.new(0, 14, 0, 52)
+        b.BackgroundColor3 = col or T.green2
+        b.Text = txt
+        b.TextColor3 = T.text
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12
+        b.BorderSizePixel = 0
+        b.Parent = par
+        cr(b, 10)
+        st(b, T.soft, 0.65)
+        return b
+    end
+
+    local function box(par, ph, pos, size, val)
+        local b = Instance.new("TextBox")
+        b.Size = size or UDim2.new(0, 150, 0, 38)
+        b.Position = pos or UDim2.new(0, 14, 0, 52)
+        b.BackgroundColor3 = T.p2
+        b.Text = val or ""
+        b.PlaceholderText = ph or ""
+        b.TextColor3 = T.text
+        b.PlaceholderColor3 = T.muted
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12
+        b.ClearTextOnFocus = false
+        b.BorderSizePixel = 0
+        b.Parent = par
+        cr(b, 10)
+        st(b, T.soft, 0.65)
+        return b
+    end
+
+    local function switch(par, txt, pos, default, cb)
+        local hold = Instance.new("Frame")
+        hold.Size = UDim2.new(0.5, -8, 0, 42)
+        hold.Position = pos
+        hold.BackgroundColor3 = T.p2
+        hold.BorderSizePixel = 0
+        hold.Parent = par
+        cr(hold, 10)
+        st(hold, T.soft, 0.72)
+
+        local lab = Instance.new("TextLabel")
+        lab.Size = UDim2.new(1, -76, 1, 0)
+        lab.Position = UDim2.new(0, 10, 0, 0)
+        lab.BackgroundTransparency = 1
+        lab.Text = txt
+        lab.TextColor3 = T.text
+        lab.Font = Enum.Font.GothamMedium
+        lab.TextSize = 12
+        lab.TextXAlignment = Enum.TextXAlignment.Left
+        lab.Parent = hold
+
+        local en = default == true
+        local sw = Instance.new("TextButton")
+        sw.Size = UDim2.new(0, 58, 0, 26)
+        sw.Position = UDim2.new(1, -66, 0.5, -13)
+        sw.BackgroundColor3 = en and T.green2 or T.off
+        sw.Text = en and "ON" or "OFF"
+        sw.TextColor3 = Color3.new(1,1,1)
+        sw.Font = Enum.Font.GothamBlack
+        sw.TextSize = 10
+        sw.BorderSizePixel = 0
+        sw.Parent = hold
+        cr(sw, 999)
+
+        sw.MouseButton1Click:Connect(function()
+            en = not en
+            sw.Text = en and "ON" or "OFF"
+            sw.BackgroundColor3 = en and T.green2 or T.off
+            stat(txt .. ": " .. (en and "ON" or "OFF"))
+            if cb then cb(en) end
+        end)
+        return sw
+    end
+
+    local function pick(par, label, opts, pos, size, cb)
+        local value = opts[1]
+        local b = btn(par, label .. ": " .. tostring(value) .. " ▾", pos, size or UDim2.new(0, 280, 0, 38), T.p2)
+        b.MouseButton1Click:Connect(function()
+            local pop = Instance.new("Frame")
+            pop.Size = UDim2.new(0, 340, 0, 300)
+            pop.Position = UDim2.new(0.5, -170, 0.5, -150)
+            pop.BackgroundColor3 = T.p1
+            pop.BorderSizePixel = 0
+            pop.ZIndex = 2000
+            pop.Parent = gui
+            cr(pop, 14)
+            st(pop, T.stroke, 0.35)
+
+            local closeP = btn(pop, "×", UDim2.new(1, -44, 0, 8), UDim2.new(0, 34, 0, 30), T.red)
+            closeP.ZIndex = 2001
+            closeP.MouseButton1Click:Connect(function() pop:Destroy() end)
+
+            local search = box(pop, "Pesquisar...", UDim2.new(0, 12, 0, 48), UDim2.new(1, -24, 0, 34), "")
+            search.ZIndex = 2001
+
+            local scroll = Instance.new("ScrollingFrame")
+            scroll.Size = UDim2.new(1, -24, 1, -94)
+            scroll.Position = UDim2.new(0, 12, 0, 88)
+            scroll.BackgroundTransparency = 1
+            scroll.BorderSizePixel = 0
+            scroll.ScrollBarThickness = 4
+            scroll.ZIndex = 2001
+            scroll.Parent = pop
+
+            local lay = Instance.new("UIListLayout")
+            lay.Padding = UDim.new(0, 6)
+            lay.Parent = scroll
+
+            local function rebuild(f)
+                f = string.lower(f or "")
+                for _, ch in ipairs(scroll:GetChildren()) do
+                    if ch:IsA("TextButton") then ch:Destroy() end
+                end
+                for _, op in ipairs(opts) do
+                    local s = tostring(op)
+                    if f == "" or string.find(string.lower(s), f, 1, true) then
+                        local o = btn(scroll, s, nil, UDim2.new(1, -6, 0, 34), s == tostring(value) and T.green2 or T.card)
+                        o.ZIndex = 2002
+                        o.MouseButton1Click:Connect(function()
+                            value = op
+                            b.Text = label .. ": " .. tostring(op) .. " ▾"
+                            pop:Destroy()
+                            if cb then cb(op) end
+                        end)
+                    end
+                end
+                scroll.CanvasSize = UDim2.new(0,0,0,lay.AbsoluteContentSize.Y + 10)
+            end
+
+            search:GetPropertyChangedSignal("Text"):Connect(function()
+                rebuild(search.Text)
+            end)
+            rebuild("")
+        end)
+        return b
+    end
+
+    local function tab(n, icon, order)
+        local b = btn(nav, isMobile and icon or (icon .. "  " .. n), nil, UDim2.new(1, 0, 0, isMobile and 38 or 48), T.p2)
+        b.LayoutOrder = order
+        tabs[n] = b
+        b.MouseButton1Click:Connect(function()
+            for k, p in pairs(pages) do p.Visible = k == n end
+            for k, bt in pairs(tabs) do bt.BackgroundColor3 = k == n and T.green2 or T.p2 end
+            stat("Aba: " .. n)
+        end)
+    end
+
+    local dash = page("Dashboard")
+    local npc = page("NPC")
+    local boss = page("Boss")
+    local prio = page("Priority")
+    local dg = page("Dungeon")
+    local cfg = page("Config")
+
+    tab("Dashboard", "🏠", 1)
+    tab("NPC", "◎", 2)
+    tab("Boss", "♛", 3)
+    tab("Priority", "★", 4)
+    tab("Dungeon", "Ω", 5)
+    tab("Config", "⚙", 6)
+
+    local c = card(dash, "DASHBOARD", 205)
+    btn(c, "Status NPC", UDim2.new(0, 14, 0, 52), UDim2.new(0.5, -22, 0, 42), T.p2).MouseButton1Click:Connect(function()
+        stat("Auto NPC fica na aba NPC")
+    end)
+    btn(c, "Status Boss", UDim2.new(0.5, 8, 0, 52), UDim2.new(0.5, -22, 0, 42), T.p2).MouseButton1Click:Connect(function()
+        stat("Auto Boss fica na aba Boss")
+    end)
+    switch(c, "Auto Attack", UDim2.new(0, 14, 0, 100), false, function(v)
+        if v then
+            autoAttackEnabled = true
+            attackThread = attackThread + 1
+            local id = attackThread
+            task.spawn(function()
+                while autoAttackEnabled and id == attackThread do
+                    if actionRemote then pcall(function() actionRemote:FireServer("M1", "Combat") end) end
+                    local ch = player.Character
+                    local tool = ch and ch:FindFirstChildOfClass("Tool")
+                    if tool then pcall(function() tool:Activate() end) end
+                    task.wait(0.12)
+                end
+            end)
+        else
+            safe(stopAutoAttack)
+        end
+    end)
+    switch(c, "Auto Equip", UDim2.new(0.5, 8, 0, 100), false, function(v)
+        if v then
+            autoEquipEnabled = true
+            equipThread = equipThread + 1
+            local id = equipThread
+            task.spawn(function()
+                while autoEquipEnabled and id == equipThread do
+                    safe(equipTool, equipBox and equipBox.Text or "")
+                    task.wait(0.8)
+                end
+            end)
+        else
+            safe(stopAutoEquip)
+        end
+    end)
+    local dashWeapon = box(c, "Nome da arma", UDim2.new(0, 14, 0, 148), UDim2.new(0.5, -22, 0, 38), equipBox and equipBox.Text or "")
+    dashWeapon.FocusLost:Connect(function()
+        if equipBox then equipBox.Text = dashWeapon.Text end
+        stat("Arma: " .. tostring(dashWeapon.Text))
+    end)
+
+
+    c = card(npc, "NPC", 170)
+    pick(c, "NPC", NPC_NAMES or {"None"}, UDim2.new(0, 14, 0, 54), UDim2.new(0, 300, 0, 38), function(v)
+        selectedNPCName = v
+        currentNPC = nil
+        if npcSelectedLabel then npcSelectedLabel.Text = "NPC selected: " .. tostring(v) end
+        if npcDropdown and npcDropdown.Button then npcDropdown.Button.Text = "Select NPC: " .. tostring(v) .. " ▼" end
+        stat("NPC: " .. tostring(v))
+    end)
+    btn(c, "Refresh", UDim2.new(0, 326, 0, 54), UDim2.new(0, 130, 0, 38), T.green2).MouseButton1Click:Connect(function()
+        safe(refreshNPCList)
+    end)
+    local npcDist = box(c, "Distância", UDim2.new(0, 14, 0, 112), UDim2.new(0, 140, 0, 38), npcHeightBox and npcHeightBox.Text or "20")
+    npcDist.FocusLost:Connect(function() if npcHeightBox then npcHeightBox.Text = npcDist.Text end end)
+    switch(c, "NPC Farm", UDim2.new(0.5, 8, 0, 110), false, function(v)
+        if npcHeightBox then npcHeightBox.Text = npcDist.Text end
+        if v then safe(startAutoFarmNPC) else safe(stopAutoFarmNPC) end
+    end)
+
+    c = card(npc, "AVISO", 100)
+    local npcEquipNotice = Instance.new("TextLabel")
+    npcEquipNotice.Size = UDim2.new(1, -28, 0, 36)
+    npcEquipNotice.Position = UDim2.new(0, 14, 0, 52)
+    npcEquipNotice.BackgroundTransparency = 1
+    npcEquipNotice.Text = "Equipamento foi movido para a Dashboard."
+    npcEquipNotice.TextColor3 = T.muted
+    npcEquipNotice.Font = Enum.Font.GothamMedium
+    npcEquipNotice.TextSize = 12
+    npcEquipNotice.TextXAlignment = Enum.TextXAlignment.Left
+    npcEquipNotice.Parent = c
+
+    c = card(boss, "BOSS", 170)
+    local bosses = {"Auto/Closest"}
+    for n in pairs(BOSS_NAMES or {}) do table.insert(bosses, n) end
+    table.sort(bosses)
+    pick(c, "Boss", bosses, UDim2.new(0, 14, 0, 54), UDim2.new(0, 300, 0, 38), function(v)
+        if v == "Auto/Closest" then
+            selectedBoss = nil
+        else
+            for _, b in ipairs(getBosses()) do
+                if b.Name == v then selectedBoss = b break end
+            end
+        end
+        stat("Boss: " .. tostring(v))
+    end)
+    local bossDist = box(c, "Distância", UDim2.new(0, 14, 0, 112), UDim2.new(0, 140, 0, 38), bossHeightBox and bossHeightBox.Text or "30")
+    bossDist.FocusLost:Connect(function() if bossHeightBox then bossHeightBox.Text = bossDist.Text end end)
+    switch(c, "Boss Farm", UDim2.new(0.5, 8, 0, 110), false, function(v)
+        if bossHeightBox then bossHeightBox.Text = bossDist.Text end
+        if v then safe(startAutoFarmBoss) else safe(stopAutoFarmBoss) end
+    end)
+
+    c = card(boss, "AIZEN CYCLE", 120)
+    switch(c, "Aizen Cycle", UDim2.new(0, 14, 0, 54), false, function(v)
+        if v then safe(startAizenSummonFarm) else safe(stopAizenSummonFarm) end
+    end)
+    btn(c, "Reset Count", UDim2.new(0.5, 8, 0, 54), UDim2.new(0.5, -22, 0, 42), T.p2).MouseButton1Click:Connect(function()
+        aizenHollowKills = 0
+        if updateAizenSummonButton then safe(updateAizenSummonButton) end
+        stat("Hollow count resetado")
+    end)
+
+    c = card(prio, "PRIORITY", 160)
+    switch(c, "Boss Priority", UDim2.new(0, 14, 0, 54), priorityBossEnabled == true, function(v) priorityBossEnabled = v end)
+    switch(c, "NPC Priority", UDim2.new(0.5, 8, 0, 54), priorityNPCEnabled == true, function(v) priorityNPCEnabled = v end)
+    btn(c, "START", UDim2.new(0, 14, 0, 110), UDim2.new(0.5, -24, 0, 42), T.green2).MouseButton1Click:Connect(function()
+        if startPriorityButton and firesignal then
+            firesignal(startPriorityButton.MouseButton1Click)
+        else
+            priorityEnabled = true
+            stat("Priority ON")
+        end
+    end)
+    btn(c, "STOP", UDim2.new(0.5, 8, 0, 110), UDim2.new(0.5, -22, 0, 42), T.red).MouseButton1Click:Connect(function()
+        safe(stopPriority)
+    end)
+
+    c = card(dg, "DUNGEON", 170)
+    pick(c, "Modo", {"Dungeon", "Tower", "Raiden"}, UDim2.new(0, 14, 0, 54), UDim2.new(0, 300, 0, 38), function(v)
+        selectedDungeon = v
+        safe(rebuildDungeonNameSet)
+        currentDungeonNPC = nil
+        safe(refreshDungeonCache)
+        stat("Dungeon: " .. tostring(v))
+    end)
+    local dgDist = box(c, "Distância", UDim2.new(0, 14, 0, 112), UDim2.new(0, 140, 0, 38), dungeonHeightBox and dungeonHeightBox.Text or "20")
+    dgDist.FocusLost:Connect(function() if dungeonHeightBox then dungeonHeightBox.Text = dgDist.Text end end)
+    switch(c, "Auto Dungeon", UDim2.new(0.5, 8, 0, 110), false, function(v)
+        if dungeonHeightBox then dungeonHeightBox.Text = dgDist.Text end
+        if v then safe(startAutoDungeon) else safe(stopAutoDungeon) end
+    end)
+
+    c = card(cfg, "CONFIG", 160)
+    pick(c, "Farm Mode", {"Above", "Behind", "Below"}, UDim2.new(0, 14, 0, 54), UDim2.new(0, 240, 0, 38), function(v)
+        safe(setFarmMode, v)
+    end)
+    btn(c, "Salvar", UDim2.new(0, 14, 0, 110), UDim2.new(0.32, -8, 0, 40), T.green2).MouseButton1Click:Connect(function() safe(saveConfig) end)
+    btn(c, "Carregar", UDim2.new(0.34, 0, 0, 110), UDim2.new(0.32, -8, 0, 40), T.p2).MouseButton1Click:Connect(function() safe(loadConfig) end)
+    btn(c, "Reset UI", UDim2.new(0.68, 0, 0, 110), UDim2.new(0.32, -8, 0, 40), T.p2).MouseButton1Click:Connect(function()
+        main.Position = isMobile and UDim2.new(0.03, 0, 0.11, 0) or UDim2.new(0.5, -450, 0.5, -280)
+    end)
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -18, 0, 30)
+    status.Position = UDim2.new(0, 10, 1, -32)
+    status.BackgroundTransparency = 1
+    status.Text = "✓ Interface carregada"
+    status.TextColor3 = T.green
+    status.Font = Enum.Font.GothamMedium
+    status.TextSize = 12
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.Parent = main
+    _G.OnyxV5Status = status
+
+    local orb = Instance.new("TextButton")
+    orb.Size = isMobile and UDim2.new(0, 58, 0, 58) or UDim2.new(0, 52, 0, 52)
+    orb.Position = UDim2.new(0, 18, 0.5, -26)
+    orb.BackgroundColor3 = T.green2
+    orb.Text = "◆"
+    orb.TextColor3 = T.text
+    orb.Font = Enum.Font.GothamBlack
+    orb.TextSize = 20
+    orb.BorderSizePixel = 0
+    orb.Parent = gui
+    cr(orb, 999)
+    st(orb, T.green, 0.25)
+
+    local od, moved, ds, sp = false, false, nil, nil
+    orb.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            od = true
+            moved = false
+            ds = input.Position
+            sp = orb.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+                    od = false
+                    task.delay(0.05, function() moved = false end)
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if od and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - ds
+            if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then moved = true end
+            orb.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y)
+        end
+    end)
+    orb.MouseButton1Click:Connect(function()
+        if moved then return end
+        main.Visible = not main.Visible
+        orb.Text = main.Visible and "×" or "◆"
+    end)
+    close.MouseButton1Click:Connect(function()
+        main.Visible = false
+        orb.Text = "◆"
+    end)
+
+    tabs["Dashboard"].MouseButton1Click:Fire()
+    stat("Final Clean carregado: Dashboard organizada.")
+end
+
+
+
+--========================================================
+-- BOSS FARM FINAL FIX
+-- Corrige boss farm não matando:
+-- 1. Procura boss por lista BOSS_NAMES.
+-- 2. Usa root/humanoid deep.
+-- 3. Move até o boss.
+-- 4. Ataca com remote e tool.
+--========================================================
+
+function OnyxFindRootDeep(obj)
+    if not obj then return nil end
+    if obj:IsA("BasePart") then return obj end
+    return obj:FindFirstChild("HumanoidRootPart", true)
+        or obj:FindFirstChild("UpperTorso", true)
+        or obj:FindFirstChild("Torso", true)
+        or obj.PrimaryPart
+        or obj:FindFirstChildWhichIsA("BasePart", true)
+end
+
+function OnyxFindHumanoidDeep(obj)
+    if not obj then return nil end
+    return obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildWhichIsA("Humanoid", true)
+end
+
+function OnyxIsBossAlive(obj)
+    if not obj or not obj.Parent then return false end
+    local hum = OnyxFindHumanoidDeep(obj)
+    local root = OnyxFindRootDeep(obj)
+    return hum and root and hum.Health > 0
+end
+
+function OnyxGetClosestAnyBoss()
+    local root = getRootSafe() or getRoot()
+    if not root then return nil end
+
+    local best = nil
+    local bestDist = math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local isBoss = false
+
+            if BOSS_NAMES and BOSS_NAMES[obj.Name] then
+                isBoss = true
+            end
+
+            local lower = string.lower(obj.Name)
+            if string.find(lower, "boss", 1, true)
+                or string.find(lower, "aizen", 1, true)
+                or string.find(lower, "sukuna", 1, true)
+                or string.find(lower, "gojo", 1, true)
+                or string.find(lower, "saber", 1, true)
+                or string.find(lower, "rimuru", 1, true)
+                or string.find(lower, "raiden", 1, true)
+                or string.find(lower, "stone", 1, true)
+                or string.find(lower, "jinwoo", 1, true)
+                or string.find(lower, "verdant", 1, true)
+            then
+                isBoss = true
+            end
+
+            if isBoss and OnyxIsBossAlive(obj) then
+                local br = OnyxFindRootDeep(obj)
+                local dist = (br.Position - root.Position).Magnitude
+
+                if dist < bestDist then
+                    bestDist = dist
+                    best = obj
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+function OnyxAttackOnce()
+    if actionRemote then
+        pcall(function()
+            actionRemote:FireServer("M1", "Combat")
+        end)
+    end
+
+    local char = player.Character
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function()
+            tool:Activate()
+        end)
+    end
+end
+
+function startAutoFarmBoss()
+    if autoFarmBossEnabled then return end
+
+    autoFarmBossEnabled = true
+    bossThread = bossThread + 1
+    local myThread = bossThread
+
+    if autoFarmBossButton then
+        autoFarmBossButton.Text = "Boss: ON"
+        autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(28, 220, 135)
+    end
+
+    task.spawn(function()
+        while autoFarmBossEnabled and myThread == bossThread do
+            local ok, err = pcall(function()
+                local target = selectedBoss
+
+                if not OnyxIsBossAlive(target) then
+                    target = OnyxGetClosestAnyBoss()
+                    selectedBoss = target
+                end
+
+                if target and OnyxIsBossAlive(target) then
+                    local br = OnyxFindRootDeep(target)
+
+                    if br then
+                        smoothMoveTo(getFarmCFrame(br, getHeight(bossHeightBox, 30)))
+                        OnyxAttackOnce()
+
+                        if bossDropdown and bossDropdown.Button then
+                            bossDropdown.Button.Text = "Select Boss: " .. target.Name .. " ▼"
+                        end
+
+                        if bossSelectedLabel then
+                            bossSelectedLabel.Text = "Boss selected: " .. target.Name
+                        end
+
+                        if setStatus then
+                            setStatus("Killing boss: " .. target.Name)
+                        end
+                    end
+                else
+                    if setStatus then
+                        setStatus("Waiting for boss")
+                    end
+                    task.wait(0.5)
+                end
+            end)
+
+            if not ok then
+                selectedBoss = nil
+                warn("[BossFarmFix]", err)
+                if setStatus then
+                    setStatus("Boss farm recovered")
+                end
+                task.wait(0.8)
+            end
+
+            task.wait(0.12)
+        end
+    end)
+end
+
+function stopAutoFarmBoss()
+    autoFarmBossEnabled = false
+    bossThread = bossThread + 1
+
+    if autoFarmBossButton then
+        autoFarmBossButton.Text = "Boss: OFF"
+        autoFarmBossButton.BackgroundColor3 = Color3.fromRGB(220, 155, 65)
+    end
+
+    if not autoFarmNPCEnabled and not autoDungeonEnabled then
+        clearSmoothHold()
+    end
+end
+
