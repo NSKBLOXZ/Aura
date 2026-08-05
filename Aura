@@ -71,7 +71,7 @@ local BOSS_NAMES = {
 	"Raiden Ei",
 	"Stone",
 	"Gilgamesh",
-	"Sukuna Shinjuku"
+	"Sukuna Shinjuku",
 }
 
 local TOWER_NPCS = {
@@ -100,7 +100,14 @@ local DUNGEON_NPCS = {
 	"KujoSara",
 	"Kujou Sara",
 	"Raiden",
-	"Raiden Ei"
+	"Raiden Ei",
+    "Miyabi",
+    "Shadown Knight",
+    "Shadown Monarch",
+    "Black Soul",
+    "White Soul",
+    "Yi Sang (Half Power)",
+    "Yi Sang"
 }
 
 local autoQuestLevel = false
