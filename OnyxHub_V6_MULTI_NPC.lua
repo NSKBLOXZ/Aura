@@ -94,9 +94,8 @@ BOSS_NAMES = {
 	"Stone",
 	"Gilgamesh",
 	"Sukuna Shinjuku",
-	"BRUH",
-	"Starrk",
-	"Escanor(Pride Sin)",
+	"Ulquiorra",
+
 }
 
 TOWER_NPCS = {
