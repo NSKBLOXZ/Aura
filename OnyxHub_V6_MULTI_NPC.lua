@@ -99,7 +99,7 @@ BOSS_NAMES = {
 	"VastoLorde",
 	"UryuMOB",
 	"ChadMOB",
-	"Vizard
+	"VizardIchigo
 
 }
 
