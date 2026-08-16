@@ -95,6 +95,7 @@ BOSS_NAMES = {
 	"Gilgamesh",
 	"Sukuna Shinjuku",
 	"Ulquiorra",
+	"Ulq"
 
 }
 
