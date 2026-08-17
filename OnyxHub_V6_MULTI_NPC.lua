@@ -100,7 +100,7 @@ BOSS_NAMES = {
 	"UryuMOB",
 	"ChadMOB",
 	"VizardIchigo",
-	"Vizard ichigo"
+	"Vizard Ichigo"
 
 }
 
