@@ -17,7 +17,7 @@ pcall(function()
 end)
 
 pcall(function()
-	local old = playerGui:FindFirstChild("OnyxHub")
+	local old = playerGui:FindFirstChild("NexusHub")
 	if old then old:Destroy() end
 end)
 
